@@ -1,0 +1,12 @@
+# Cache of flattened Bambu Studio profiles — resolve_profile.py rebuilds it.
+profiles/
+
+__pycache__/
+*.pyc
+
+# The owner's real hardware config lives one level up, outside this repo.
+# Should a copy ever land here, it must not be committed.
+hardware.json
+
+# macOS
+.DS_Store

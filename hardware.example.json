@@ -1,0 +1,52 @@
+{
+  "_": "Copy this file to the PARENT directory of tools/ and rename it hardware.json. Every script reads the nozzle, layer height, line width and preset names from there and keeps no such constants of its own. Change the nozzle in the machine, edit nozzle.installed, and nothing else.",
+
+  "printer": {
+    "model": "Bambu Lab A1",
+    "bed": [256, 256, 256],
+    "plate": "Textured PEI Plate",
+    "_plate": "Must name the plate you actually print on: curr_bed_type in the sliced project is taken from here, and a wrong value heats the bed to the wrong temperature."
+  },
+
+  "nozzle": {
+    "installed": 0.4,
+    "owned": [0.4, 0.2],
+    "_": "installed is the nozzle physically in the machine RIGHT NOW. Override for a single run without editing the file: A1_NOZZLE=0.2 python3 ..."
+  },
+
+  "profiles": {
+    "0.4": {
+      "machine": "Bambu Lab A1 0.4 nozzle",
+      "process": "0.20mm Standard @BBL A1",
+      "filament": "Bambu PLA Basic @BBL A1",
+      "layer_height": 0.2,
+      "line_width": 0.42,
+      "initial_layer_line_width": 0.5,
+      "initial_layer_height": 0.2,
+      "initial_layer_speed": 50,
+      "max_volumetric_speed": 21
+    },
+    "0.2": {
+      "machine": "Bambu Lab A1 0.2 nozzle",
+      "process": "0.10mm Standard @BBL A1 0.2 nozzle",
+      "filament": "Bambu PLA Basic @BBL A1 0.2 nozzle",
+      "layer_height": 0.1,
+      "line_width": 0.22,
+      "initial_layer_line_width": 0.25,
+      "initial_layer_height": 0.1,
+      "initial_layer_speed": 16,
+      "max_volumetric_speed": 2
+    },
+    "_": "Preset names must exist in your Bambu Studio installation, spelled exactly as the profile JSON spells them. Take the numbers from the installed profiles with resolve_profile.py rather than from the wiki: the wiki lags. machine / process / filament are read by 5, 9 and 14 scripts respectively; the four initial_layer_* and max_volumetric_speed fields are reference only, no script reads them."
+  },
+
+  "filaments": [
+    {"brand": "Bambu Lab", "type": "PLA Basic", "color": "black", "spools": 2, "profile": "Bambu PLA Basic @BBL A1", "density": 1.26},
+    {"brand": "Bambu Lab", "type": "PLA Matte", "color": "white", "spools": 1, "profile": "Bambu PLA Matte @BBL A1", "density": 1.32},
+    {"brand": "Generic",   "type": "PLA",       "color": "grey",  "spools": 1, "profile": "Generic PLA @BBL A1",     "density": 1.24},
+    {"_": "Inventory, for humans and for weight estimates. No script parses this array, so the key names here are free. Densities differ enough to matter: the same part in PLA Lite (1.40) weighs 11 % more than in PLA Basic (1.26)."}
+  ],
+
+  "density_default": 1.26,
+  "_density_default": "g/cm3 used for weight estimates when the filament is not named. 1.26 is Bambu PLA Basic."
+}
