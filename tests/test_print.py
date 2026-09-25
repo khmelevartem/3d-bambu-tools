@@ -186,6 +186,14 @@ def _():
     close(num(out, r"\n\s+3\.00\s+(\d+) мм²"), 251, 15, "опора при резе 3 мм")
 
 
+@case("figcheck:перебитый заголовок объясняется словами", tools=("figcheck.py",))
+def _():
+    """`--with` заменяет заголовок скрипта, а не дополняет его."""
+    out = run(["uv", "run", "--quiet", "--with", "trimesh", "--with", "numpy",
+               "python", TOOLS / "figcheck.py", FIX / "ball.stl"], expect=1)
+    contains(out, "нет зависимостей", "запускать без --with")
+
+
 @case("figcheck:свесы фигурки опираются на саму модель", tools=("figcheck.py",))
 def _():
     out = figcheck(FIX / "figurine.stl")

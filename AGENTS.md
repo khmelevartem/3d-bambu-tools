@@ -58,6 +58,15 @@ renders, slices, throwaway scripts. A model folder holds only what gets
 printed, plus reference images. When a finished artefact is placed next to a
 model, say so.
 
+**A tool that carries its own dependency header runs through plain `uv run`.**
+`figcheck.py` and `paint_normalize.py` start with a PEP 723 block, so
+`uv run tools/figcheck.py part.stl` installs exactly what they need. Adding
+`--with ...` to such a call replaces the header instead of extending it, and
+the tool then dies deep inside a library on a missing transitive dependency —
+`trimesh` needs `shapely` and `networkx` to turn a section into polygons. Tools
+without a header take their dependencies on the command line, as their own
+docstring shows.
+
 **Measure; do not assume.** Most of what is recorded here contradicts a
 plausible default, which is why it is written down at all. Where a tool reports
 a number, quote the number in the answer rather than a verdict: "supports

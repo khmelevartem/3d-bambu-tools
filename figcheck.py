@@ -22,7 +22,7 @@ Angles are counted FROM THE HORIZONTAL: 90 means the face points straight down
 (the worst overhang), 0 is a vertical wall. Bambu's `support_threshold_angle`
 uses the opposite convention: threshold = 90 - ours.
 """
-import argparse, sys
+import argparse, importlib.util, sys
 import numpy as np
 import trimesh
 import hardware                 # line width and layer come from hardware.json
@@ -35,10 +35,33 @@ def contour_stats(m, z):
     if s is None:
         return 0.0, 0, 0.0
     p, _ = s.to_2D()
-    return p.area, len(p.polygons_full), sum(g.length for g in p.polygons_full)
+    try:
+        polys = p.polygons_full
+    except ModuleNotFoundError as e:
+        # trimesh needs shapely and networkx to turn a section into polygons, and
+        # the header above already asks for them. A `--with` on the command line
+        # REPLACES that header, so the tool dies here instead of at import.
+        sys.exit(f"нет зависимости {e.name or e}: у скрипта свои зависимости в заголовке, "
+                 f"запускать без --with:\n    uv run tools/figcheck.py файл.stl")
+    return sum(q.area for q in polys), len(polys), sum(g.length for g in polys)
+
+
+# trimesh reaches for these only when a section is turned into polygons, and it
+# swallows the ImportError until then. The header above asks for them; a `--with`
+# on the command line REPLACES that header, so say it plainly instead of dying
+# three libraries deep.
+DEPS = ("scipy", "shapely", "networkx", "rtree")
+
+
+def check_deps():
+    missing = [n for n in DEPS if importlib.util.find_spec(n) is None]
+    if missing:
+        sys.exit(f"нет зависимостей: {', '.join(missing)}. У скрипта свои зависимости "
+                 f"в заголовке, запускать без --with:\n    uv run tools/figcheck.py файл.stl")
 
 
 def main():
+    check_deps()
     ap = argparse.ArgumentParser()
     ap.add_argument("stl")
     ap.add_argument("--layers", nargs="*", type=float, default=[0.20, 0.12, 0.08])

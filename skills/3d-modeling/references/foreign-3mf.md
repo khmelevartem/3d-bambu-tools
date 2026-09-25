@@ -107,6 +107,58 @@ Horizontal sections at several heights show a broken feature as a separate
 small contour: its centres give the axis, a neighbouring pair gives `--dir`,
 and the height at which the contour disappears is the broken end face.
 
+## Overlapping parts of one object already print as one body
+
+A downloaded or hand-assembled project often carries a figure as one object
+made of several parts — a torso, a limb set back in place, a plug filling an
+old socket — each with its own offset in `model_settings.config`. They overlap,
+and the slicer unions them at slice time. **Slicing the eight parts separately
+and slicing their boolean union gave the same G-code to the gram and to the
+minute** (15.16 g / 45:41 against 15.17 g / 45:37, identical line-type
+breakdown). So welding them for the printer's sake buys nothing.
+
+Weld only when the file itself has to hold one mesh, and name the price first:
+
+- the paint dies with the topology and has to be moved by geometry afterwards
+  (`paint_transfer.py`);
+- the union leaves artefacts a clean input did not have — expect tens of
+  non-manifold edges on a million-face figure even with the manifold solver;
+- filament areas drop after the transfer by exactly the surfaces that went
+  inside — a limb sunk into a torso took 17 % of one colour's area with it.
+  That is not lost paint, and saying so is part of the report.
+
+After welding, delete the absorbed parts from both `3dmodel.model`
+(the `<component>` entries) and `model_settings.config` (the `<part>` blocks),
+or the file keeps components pointing at meshes that no longer exist.
+
+## Ball joints: find them by radius, and fill a socket by its wall
+
+A figurine cut for assembly carries ball-and-socket pairs, and the pair is
+proved by arithmetic: the ball on the limb and the socket in the body come out
+at the same radius to hundredths (2.63 against 2.77 for a shoulder, 0.571
+against 0.568 for a bead on a finger). `balljoint.py find` votes normals into a
+lattice and reports every sphere at once.
+
+**Anatomy fakes small spheres.** A fingertip or a knuckle votes as a sphere of
+r ≈ 1 mm with a third of its area — the same signature as a small joint. Tell
+them apart by the spread of the radius: a designed ball comes back at ±0.01 mm,
+a knuckle at ±0.03 and worse, and the designed one is also the one whose radius
+matches a socket elsewhere.
+
+**Removing a ball is surgery, not a boolean.** Delete the faces inside a ball
+of about 1.3 times its radius, fill the hole, and relax the new vertices a few
+times while pinning the rim; the volume drops by the ball's own volume and the
+mesh stays closed.
+
+**Filling a socket with a sphere does not work.** A sphere smaller than the
+socket floats inside it as a separate shell, a larger one stands out as a bead,
+and neither closes the mouth. Delete the socket's wall instead — the faces
+within the socket radius whose normals point back at its centre — then fill the
+mouth that is left. Prove it with three numbers afterwards: the socket detector
+no longer finds it, no convex sphere appeared in its place, and a grid of rays
+dropped onto the surface spans the same height as before (1.69 mm against
+1.71 mm on an armrest).
+
 ## Swapping the print profile
 
 A downloaded project carries its author's print profile in

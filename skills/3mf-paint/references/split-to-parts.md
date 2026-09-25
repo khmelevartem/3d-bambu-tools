@@ -66,6 +66,17 @@ there is then no pair of adjacent faces of different colours anywhere. Such a
 plane has to be derived — and **named out loud as a derivation, not as a
 measurement.**
 
+### Choosing the seam plane when the colour border is the seam
+
+A limb usually gives several closed borders between the two filaments, and the
+longest one is not always the joint: on a closed fist the border around the
+bore was 92 mm long while the wrist was 24 mm. Fit a plane to every border loop
+and score it by **how much surface area ends up on the wrong side of it** —
+area of the cut colour left behind, plus area of the other colour carried
+along. The wrist scored 4.5 %, the bore 17 %. Report the winner's residue with
+the plane: below about 1 % the seam lands where the drawing already was, and a
+few percent means the colour edge will visibly move.
+
 ## Decide the assembly order before placing pins
 
 **Every part must have exactly one direction along which it goes into place.**
@@ -73,6 +84,31 @@ Check this before the pins, never after: a vertical pin into the base plus a
 horizontal pin into a neighbour would require inserting the part in two
 directions at once. Moving a pin to another face of the joint fixes it for
 nothing; re-cutting afterwards does not.
+
+## A pin is as deep inside the part as it is long outside it
+
+Cutting tools that graft a pin — this repository's, and the Blender add-ons —
+build it symmetric about the cut plane: half protrudes into the socket, half is
+buried in the part carrying it. On a solid block that is free. On a figurine
+the buried half goes straight through a thin wall and comes out inside a
+cavity: the bore of a fist, the hollow of a boot, a channel meant for another
+part. Nothing in the tool notices, and the preview shows a clean part.
+
+**Measure the wall before trusting the pin.** March along the pin axis into the
+part in 0.1 mm steps and test a ring of points at the pin radius against the
+original mesh; the depth is the last step where every point is still inside.
+Where it is shorter than the pin's half-length, cut again without a pin and
+graft your own cylinder: the protrusion stays, the buried part becomes the
+measured depth minus 0.2 mm.
+
+A thinner pin reaches deeper when the obstacle is a round channel — halving the
+diameter roughly doubled the usable depth in one case. Trading diameter for
+depth is the better deal whenever the joint is glued anyway.
+
+**The buried length is not what holds the joint.** The bond is the pin's
+cross-section at the cut face plus the glue, so even 0.5 mm of burial is
+serviceable; say the number out loud rather than pretending the fit is
+unchanged.
 
 ## When the colour comes from overlapping bodies
 
@@ -170,6 +206,14 @@ cost little.
 
 **Hand the parts over already rotated for printing**, not in their original
 orientation. Naming the orientation in words is not enough.
+
+**A pin only prints round when its axis stands up.** Lay the part so the pin
+axis is within about 30 degrees of vertical and let the support area and the
+overhangs be optimised inside that constraint, not against it. A pin printed
+lying down sags on its underside, and the 0.1 mm per side of a sliding fit does
+not survive that; a small part standing on 4 mm of contact does survive, with a
+brim. Sweep orientations with the axis as a hard filter and report both numbers
+— contact area and overhang area — for the pose you hand over.
 
 ### Clearances
 
@@ -372,6 +416,12 @@ below a square millimetre to their neighbour, the same way speckle is handled.
 
 **Measure the socket floor across the whole section, not on the axis.** The
 surface above the rim of a socket is closer than the surface above its centre.
+
+**A part must not stick out of the body it came from.** Sample its vertices
+and take the signed distance to the original mesh: anything positive outside is
+a pin through a wall, or a patch that grew. Do not ask this question with a
+boolean intersection — the two meshes share coplanar faces and the solver
+returns garbage.
 
 ## Presenting the result
 

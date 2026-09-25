@@ -212,6 +212,36 @@ the parse returns thousands of false one-face bodies.
 call methods that no longer exist, and the libraries they need are not in the
 usual install line.
 
+**Widening the weld tolerance does not cure non-manifold edges; it breeds
+them.** On a generated figurine 19 non-manifold edges became 22, 54 and 90 as
+the tolerance went 0.005, 0.02, 0.05 mm, while the volume never moved. Welding
+answers "separate sheets that should be one", not "three faces on one edge".
+
+**What does cure a handful of non-manifold edges is local surgery.** Delete
+every face whose centre lies within about one nozzle line of the defective
+edge's midpoint, then fill the hole and recompute normals. On the same figurine
+a 0.4 mm ball around each of 19 edges took out 467 faces and left the mesh
+closed and manifold, with the volume unchanged to the first decimal. A wider
+ball is worse, not safer: at 0.8 mm the patch itself tore open again. Do this
+on a local copy and compare the counts; it is a last resort after the ordered
+route above, and it does change the shape inside the ball.
+
+**Pick the boolean solver by measurement, and check that it ran at all.**
+Blender's manifold solver refuses a mesh that is not manifold and silently
+returns the input: the face count and the volume come back identical, no error
+is raised, and the "result" is the untouched original. Compare both numbers
+after every boolean. The exact solver always runs, but on a dense organic mesh
+it leaves two orders of magnitude more non-manifold edges than the manifold
+solver does on the same union (7035 against 42 on a 1.6-million-face figure).
+So: repair the inputs, use the manifold solver, and keep the exact one as the
+fallback for inputs that cannot be made manifold.
+
+**A boolean between a part and the body it was cut from is not a check.** They
+share whole coplanar surfaces, and the exact solver returns nonsense there —
+intersections came back as negative volumes on parts that were provably fine.
+To ask "does this part stick out of the original", sample its vertices and take
+the signed distance to the original mesh.
+
 ## Checking the result
 
 1. `meshdoctor`: verdict CLEAN, and as many bodies as intended.
