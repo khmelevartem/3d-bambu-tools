@@ -1,17 +1,17 @@
 #!/usr/bin/env python3
-"""Сверка 3D-модели с референсной картинкой.
+"""Compare a 3D model against a reference picture.
 
-Кладёт ортогональную проекцию модели поверх фотографии в одном масштабе
-и меряет расхождения деталей в миллиметрах.
+Lays an orthographic projection of the model over the photograph at one scale
+and measures feature deviations in millimetres.
 
     UV="uv run --quiet --with numpy --with scipy --with pillow python"
-    $UV tools/refcompare.py fit  модель.3mf фото.jpg --out work/cmp.npz [--cut-from-top 45]
-    $UV tools/refcompare.py sheet   work/cmp.npz work/сверка.png
-    $UV tools/refcompare.py measure work/cmp.npz --report work/числа.txt
+    $UV tools/refcompare.py fit  model.3mf photo.jpg --out work/cmp.npz [--cut-from-top 45]
+    $UV tools/refcompare.py sheet   work/cmp.npz work/comparison.png
+    $UV tools/refcompare.py measure work/cmp.npz --report work/numbers.txt
 
-Масштаб не подбирается на глаз: три параметра (масштаб и два сдвига) ищутся
-максимизацией совпадения силуэтов. Совпадение площадей печатается — по нему
-видно, можно ли доверять остальным числам.
+The scale is not guessed: three parameters - one scale and two offsets - are
+found by maximising silhouette agreement. **That agreement is printed, and it
+decides whether the other numbers can be trusted at all.**
 """
 import argparse, sys, zipfile, re
 import numpy as np
@@ -22,7 +22,7 @@ from scipy.optimize import minimize
 NS = '{http://schemas.microsoft.com/3dmanufacturing/core/2015/02}'
 NSP = '{http://schemas.microsoft.com/3dmanufacturing/production/2015/06}'
 
-# ---------------------------------------------------------------- геометрия
+# ---------------------------------------------------------------- geometry
 
 def _tf(s):
     a = np.array(s.split(), dtype=np.float64)
@@ -123,7 +123,7 @@ def to_screen(V, view):
     right = np.cross(d, up)
     return V @ right, V @ up, -(V @ d)
 
-# ------------------------------------------------------------- растеризация
+# ------------------------------------------------------------- rasterising
 
 def vnormals(V, F):
     P = V[F]
@@ -183,7 +183,7 @@ def raster(U, Vv, D, F, N, W, H, s, cx, cy, seed=0):
     L[L == 0] = 1
     return Zb.reshape(H, W), (Nb / L[:, None]).reshape(H, W, 3)
 
-# -------------------------------------------------------------------- фото
+# -------------------------------------------------------------------- photo
 
 def photo_mask(img, tol=14):
     """Фон у студийного рендера ровный: берём медиану рамки."""
@@ -201,8 +201,8 @@ def do_fit(a):
     P, _ = photo_mask(img, a.bg_tol)
     V, F = load_mesh(a.model)
     U, Vv, D = to_screen(V, a.view)
-    U = U - (U.min() + U.max()) / 2      # деталь на столе стоит в точке (128, 128):
-                                         # без этого стартовая догадка улетает за кадр
+    U = U - (U.min() + U.max()) / 2      # a part on the bed sits at the bed centre:
+                                         # without this the initial guess flies off-frame
     Nu, Nvv, Nd = to_screen(vnormals(V, F), a.view)
     N = np.stack([Nu, Nvv, Nd], 1)
     top = Vv.max()
@@ -242,7 +242,7 @@ def do_fit(a):
     Z, NB = raster(U, Vv, D, F, N, W, H, s, cx, cy)
     mask = Z > -1e8
     hole = ndi.binary_fill_holes(mask) & ~mask
-    Zs = ndi.median_filter(np.where(mask, Z, -1e9), size=3)      # крап растра
+    Zs = ndi.median_filter(np.where(mask, Z, -1e9), size=3)      # raster speckle
     if hole.any():
         Zs[hole] = ndi.maximum_filter(Zs, size=5)[hole]
         for k in range(3):
@@ -263,7 +263,7 @@ def load_state(p):
     img = np.asarray(Image.open(str(d['photo'])).convert('RGB')).astype(np.float64)
     return d, img
 
-# -------------------------------------------------------- рельеф и детали
+# -------------------------------------------------------- relief and features
 
 def relief(Z, mask, box, sigma, facing=None, nz=0.6):
     """Высота над сглаженной поверхностью: так проступают глаза, брови, усы.
@@ -313,15 +313,15 @@ def match_shift(R, valid, m, maxsh, ringw):
     def avg(K):
         num = fftconvolve(R0, K[::-1, ::-1], mode='same')
         den = fftconvolve(V, K[::-1, ::-1], mode='same')
-        ok = den > 0.9 * K.sum()      # деталь должна почти целиком лежать
-                                      # в измеренной области, иначе корреляция
-                                      # уползёт за край окна, где сравнивать не с чем
+        ok = den > 0.9 * K.sum()      # a feature must lie almost entirely inside
+                                      # the measured region, or the correlation
+                                      # crawls past the window edge
         return np.where(ok, num / np.maximum(den, 1e-9), -1e9), ok
 
     aT, okT = avg(T)
     aG, okG = avg(G)
     S = np.where(okT & okG, aT - aG, -1e9)
-    p0 = (y0 + (T.shape[0] - 1) // 2, x0 + (T.shape[1] - 1) // 2)   # нулевой сдвиг
+    p0 = (y0 + (T.shape[0] - 1) // 2, x0 + (T.shape[1] - 1) // 2)   # zero offset
     win = S[p0[0] - maxsh:p0[0] + maxsh + 1, p0[1] - maxsh:p0[1] + maxsh + 1]
     k = np.unravel_index(np.argmax(win), win.shape)
     return k[0] - maxsh, k[1] - maxsh, float(win[k]), float(S[p0])
@@ -407,9 +407,9 @@ def do_measure(a):
     if not PF:
         say('\nтёмных деталей на картинке не нашлось — подкрутить --dark / --feat-min')
     else:
-        # окно рельефа — только вокруг самих деталей. Запас берётся по размеру
-        # окна сглаживания: шире — и в рельеф лезут поля шляпы и плечи, а их
-        # рельеф перебивает лицо и перетягивает назначение на себя
+        # the relief window covers only the features themselves. The margin
+        # follows the smoothing window: any wider and a hat brim or shoulders
+        # get into the relief and outweigh the face, stealing the assignment
         bs = [bbox(m) for m in PF]
         pad = int(round(a.base_sigma * s))
         box = (max(0, min(b[0] for b in bs) - pad),
@@ -442,9 +442,9 @@ def do_measure(a):
                     'или ушла дальше окна поиска' % peak)
             elif abs(dy) >= maxsh - 1 or abs(dx) >= maxsh - 1:
                 say('      сдвиг упёрся в границу поиска — увеличить --max-shift')
-            # круглая деталь у Funko — вставленный шарик: если поверхность под
-            # ней и правда сферическая, её диаметр — честное число, в отличие
-            # от «границы пятна», которая зависит от выбранного порога
+            # a round feature is an inserted ball: if the surface beneath it
+            # really is spherical, its diameter is an honest number, unlike the
+            # "edge of the patch", which depends on the chosen threshold
             fill = PF[i].sum() / ((ys.max() - ys.min() + 1) * (xs.max() - xs.min() + 1))
             ar = (xs.max() - xs.min() + 1) / (ys.max() - ys.min() + 1)
             if 0.8 < ar < 1.25 and fill > 0.7 and peak >= a.min_peak:
@@ -460,9 +460,9 @@ def do_measure(a):
                         rad3 = np.sqrt(rr2)
                         res = np.abs(np.linalg.norm(P3 - c3, axis=1) - rad3)
                         dph = ((xs.max() - xs.min()) + (ys.max() - ys.min())) / 2 / s
-                        # видно не весь шарик, а шапочку: остальное утоплено
-                        # в лицо. Сравнивать с нарисованным кругом надо шапочку —
-                        # ту часть поверхности, которая и правда лежит на сфере
+                        # what is visible is a cap, not the whole ball: the rest
+                        # is sunk into the surface. What to compare with the drawn
+                        # circle is that cap, the part genuinely lying on the sphere
                         r0 = max(0, yy.min() - 120); r1 = min(Z.shape[0], yy.max() + 120)
                         cc0 = max(0, xx.min() - 120); cc1 = min(Z.shape[1], xx.max() + 120)
                         Yg, Xg = np.mgrid[r0:r1, cc0:cc1]
@@ -500,7 +500,7 @@ def do_measure(a):
         open(a.report, 'w').write('\n'.join(lines) + '\n')
         print('\nотчёт:', a.report)
 
-# -------------------------------------------------------------------- лист
+# -------------------------------------------------------------------- sheet
 
 def do_sheet(a):
     from PIL import Image, ImageDraw, ImageFont
@@ -520,8 +520,8 @@ def do_sheet(a):
     lamp /= np.linalg.norm(lamp)
     idx = ndi.distance_transform_edt(~mask, return_distances=False, return_indices=True)
     Zf = np.where(mask, Z, Z[tuple(idx)])
-    # лёгкое затенение впадин: без него лицо выглядит плоским блином.
-    # окно 1 мм, коэффициент подобран так, чтобы складка в 0.5 мм читалась
+    # light shading of the hollows: without it a face looks like a flat pancake.
+    # 1 mm window, with the factor chosen so a 0.5 mm crease reads
     ao = np.clip(0.72 + 0.43 * (Zf - ndi.gaussian_filter(Zf, max(2.0, s))), 0.55, 1.12)
     sh = np.clip((0.16 + 0.84 * np.clip(NB @ lamp, 0, 1) ** 0.75) * ao, 0, 1)
     mdl = np.where(mask[..., None], np.repeat(sh[..., None], 3, 2), 1.0) * 255

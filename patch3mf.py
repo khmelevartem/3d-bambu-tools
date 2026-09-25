@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""Правка Metadata/project_settings.config внутри 3MF: меняет ключи и при
-надобности выкидывает филамент из проекта целиком.
+"""Patch Metadata/project_settings.config inside a 3MF: change keys and, if
+needed, drop a filament from the project entirely.
 
-Всё остальное в архиве переносится дословно — сетка, покраска, превью,
-раскладка по пластинам. Так проверяется РОВНО одна правка за раз.
+Everything else in the archive is carried over verbatim — mesh, paint,
+preview, plate layout. That is how EXACTLY one change gets tested at a time.
 
     python3 tools/patch3mf.py in.3mf out.3mf key=value [key=value ...]
-    python3 tools/patch3mf.py in.3mf out.3mf --drop-filament 2   # номер с 1
+    python3 tools/patch3mf.py in.3mf out.3mf --drop-filament 2   # 1-based
 """
 import json, sys, zipfile
 

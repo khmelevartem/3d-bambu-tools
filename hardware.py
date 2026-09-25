@@ -1,20 +1,20 @@
 #!/usr/bin/env python3
-"""Чтение hardware.json — единственного места, где записано железо.
+"""Reading hardware.json — the single place where the machine is recorded.
 
-Ни один скрипт проекта не держит диаметр сопла, высоту слоя, ширину линии
-и имена профилей у себя в константах: всё берётся отсюда. Поменял сопло —
-правишь одно поле в hardware.json, и printcheck, meshdoctor, figcheck
-и slice.sh начинают мерить по нему.
+No script in this project keeps the nozzle diameter, layer height, line
+width or preset names as its own constants: it all comes from here. Change
+the nozzle, edit one field in hardware.json, and printcheck, meshdoctor,
+figcheck and slice.sh all start measuring by it.
 
     import hardware
-    hardware.nozzle()        # 0.4  — диаметр установленного сопла, мм
-    hardware.line_width()    # 0.42 — ширина линии у его штатного профиля
+    hardware.nozzle()        # 0.4  — installed nozzle diameter, mm
+    hardware.line_width()    # 0.42 — line width of its stock profile
     hardware.layer_height()  # 0.2
     hardware.profile()       # {'machine': ..., 'process': ..., 'filament': ...}
 
-Разовое переопределение, без правки файла:  A1_NOZZLE=0.2 python3 …
+One-off override, without editing the file:  A1_NOZZLE=0.2 python3 …
 
-Только stdlib: printcheck.py и meshdoctor.py запускаются системным python3.
+Stdlib only: printcheck.py and meshdoctor.py run on the system python3.
 """
 import json, os, pathlib
 
@@ -26,7 +26,7 @@ def load():
 
 
 def nozzle():
-    """Диаметр установленного сопла, мм. A1_NOZZLE перебивает файл."""
+    """Installed nozzle diameter, mm. A1_NOZZLE overrides the file."""
     env = os.environ.get("A1_NOZZLE")
     if env:
         return float(env)
@@ -34,7 +34,7 @@ def nozzle():
 
 
 def profile(nz=None):
-    """Блок профилей для сопла: имена пресетов и их числа."""
+    """The profile block for a nozzle: preset names and their numbers."""
     d = load()
     key = _key(nz if nz is not None else nozzle())
     if key not in d["profiles"]:
@@ -70,7 +70,7 @@ def density_default():
 
 if __name__ == "__main__":
     import sys
-    if len(sys.argv) > 1:                 # для shell: hardware.py machine
+    if len(sys.argv) > 1:                 # for shell: hardware.py machine
         k = sys.argv[1]
         d = load()
         if k == "nozzle_key":

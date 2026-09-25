@@ -1,55 +1,53 @@
 #!/usr/bin/env python3
-"""Поворотные узлы на цилиндрах между напечатанными деталями.
+"""Pivot joints on cylinders between printed parts.
 
-Деталь крутится относительно соседней, если у них общая ось и обе
-поверхности вокруг неё — тела вращения. Дешевле всего это делается так:
-ровный рез поперёк оси, слепое отверстие в каждой половине и отдельно
-напечатанный штифт. Штифт не торчит из детали при печати, поэтому не
-просит поддержек, а посадку можно подобрать одним размером отверстия:
-свободно крутится — плюс 0.3 мм к диаметру, сидит намертво под клей —
-плюс 0.15.
+A part turns against its neighbour when they share an axis and both surfaces
+around it are solids of revolution. The cheapest way to build that: a straight
+cut across the axis, a blind hole in each half, and a separately printed pin.
+A pin does not stick out of the part while printing, so it needs no supports,
+and the fit is set by the hole diameter alone - free to turn, or seated for
+glue.
 
-Задание — JSON:
+The job is JSON:
 
     {
       "out": "work/joints",
-      "parts": {"голова": "work/parts/filament3.stl"},
-      "cuts":  [{"part":"рубашка","p":[-1.9,7,-0.4],"d":[0,1,0],
-                 "keep":"рубашка","away":"рука"}],
-      "holes": [{"part":"голова","p":[0.85,-4.35,3.5],"d":[0,0,1],
+      "parts": {"head": "work/parts/filament3.stl"},
+      "cuts":  [{"part":"shirt","p":[-1.9,7,-0.4],"d":[0,1,0],
+                 "keep":"shirt","away":"arm"}],
+      "holes": [{"part":"head","p":[0.85,-4.35,3.5],"d":[0,0,1],
                  "dia":5.3,"from":0.2,"to":7.5}],
       "dowels":[{"dia":5.0,"len":14,"n":4}]
     }
 
-`cuts` режет деталь плоскостью (p, d) надвое: `keep` — половина со стороны
-−d, `away` — со стороны +d; обе закрываются плоской крышкой. `holes`
-вырезает цилиндр вдоль оси на отрезке [from, to] от точки p — тем же
-ключом делается и выборка под воротник, просто большего диаметра.
-`dowels` пишет отдельный файл со штифтами, расставленными в ряд.
+`cuts` splits a part with the plane (p, d): `keep` is the half on the -d side,
+`away` the one on +d, and both get a flat cap. `holes` cuts a cylinder along an
+axis over the span [from, to] from point p. `dowels` writes a separate file of
+pins laid out in a row.
 
-`joints` — то же самое, но одной строкой на стык и без ручной арифметики:
+`joints` is the same thing in one line per joint, without hand arithmetic:
 
-    {"joints":[{"parts":["рубашка","рука"],"p":[-1.9,7,-0.4],"d":[0,1,0],
+    {"joints":[{"parts":["shirt","arm"],"p":[-1.9,7,-0.4],"d":[0,1,0],
                 "size":4.0,"depth":[5.0,5.0],"shape":"rect","fit":[0.15,0.3]}]}
 
-Раскрывается в две слепые ниши навстречу друг другу и один штифт. Правила
-допусков зашиты внутрь и повторяют разобранную 21.09.2026 фигурку
-Spider-Man с MakerWorld: ниша шире штифта на `fit` по диаметру (0.15 —
-сидит под клей, 0.3 — входит от руки), а штифт **на миллиметр короче**
-суммы глубин, иначе он упрётся в дно раньше, чем сойдутся сами детали,
-и на стыке останется щель. `shape: rect` даёт квадратное сечение: круглый
-штифт оставляет деталям поворот вокруг своей оси, квадратный — нет.
+It expands into two blind sockets facing each other and one pin. The tolerance
+rules are built in: the socket is wider than the pin by `fit` per side -
+tighter in the half that sits under glue, looser in the half that goes on by
+hand - and **the pin is a millimetre shorter than the sum of the depths**, or
+it bottoms out before the parts meet and leaves a gap at the visible joint.
+`shape: rect` gives a square section: **a round pin leaves the parts free to
+rotate about it, a square one does not.**
 
     uv run --quiet python tools/pivot_joint.py work/joints.json
 
-Работает через Blender в фоне (как meshfix.py), булево — точным решателем.
+Runs through Blender headless, like meshfix.py, with the exact boolean solver.
 """
 import json, os, subprocess, sys
 
 BLENDER = "/Applications/Blender.app/Contents/MacOS/Blender"
 
 
-# ======================= часть, работающая внутри Blender =======================
+# ======================= the part that runs inside Blender ======================
 
 def run_in_blender(argv):
     import bpy, bmesh
@@ -195,11 +193,11 @@ def run_in_blender(argv):
         return v
 
     made_joints = []
-    # Стык одной строкой: две встречные слепые ниши и штифт под них.
-    # Проверяются обе ниши сразу и до сверления: деталь, вырезанная по цвету,
-    # у самого шва бывает тонким клином, и ниша уходит мимо неё. Сделать
-    # половину стыка нельзя — штифту тогда некуда встать, поэтому стык
-    # либо целиком, либо никак.
+    # A joint in one line: two opposing blind sockets and a pin to match.
+    # Both sockets are checked at once and before drilling: a part cut out by
+    # colour can be a thin wedge right at the seam, and the socket then goes
+    # past it. Half a joint is useless - the pin has nowhere to stand - so the
+    # joint is made whole or not at all.
     for j in spec.get("joints", []):
         sz, (da, db) = j["size"], j["depth"]
         fa, fb = j.get("fit", [0.15, 0.3])
@@ -217,11 +215,11 @@ def run_in_blender(argv):
             bpy.data.objects.remove(cy, do_unlink=True)
             return vi / full if full else 0.0
 
-        # Кто с какой стороны и куда смотрит ось — четыре варианта, и
-        # решает их булево, а не догадка выше по конвейеру. Догадка по
-        # средней стороне куска ошибается там, где у шва три соседа:
-        # на талии Робби она уверенно показала на брюки, а ниша уходила
-        # в воздух.
+        # Who is on which side and where the axis points: four variants, decided
+        # by the boolean rather than by a guess earlier in the pipeline. A guess
+        # from a piece's mean side is wrong wherever a seam has three
+        # neighbours, and the socket then drills into thin air.
+
         best, a, b, sgn = None, None, None, 1
         for pa in names:
             for pb in names:
@@ -271,9 +269,9 @@ def run_in_blender(argv):
             full = 0.0
         else:
             cy = solid(h["p"], h["d"], h["from"], h["to"], sz, sh)
-            # Объём резца ниже поверхности — то, с чем сравнивать выбранное.
-            # Считается только когда глубина ниши названа явно (`deep`):
-            # у отверстия, написанного руками, где кончается тело, неизвестно.
+            # Cutter volume below the surface - the reference for what was
+            # actually removed. Computed only when the socket depth is stated
+            # explicitly: for a hand-written hole, where the body ends is unknown.
             deep = h.get("deep", 0.0)
             full = (sz * sz if sh == 'rect' else 3.14159 * sz * sz / 4) * deep / 1000
         v0 = stats(t)[1]
@@ -292,9 +290,9 @@ def run_in_blender(argv):
             print(f'отверстие {tag}: ОТМЕНЕНО — булево дало {v:.2f} см3, '
                   f'а в резце было {1000*vi:.0f} мм3 материала')
             continue
-        # Ниша, у которой выбрано заметно меньше своего объёма, стенку
-        # пробила: часть резца прошла мимо тела. Снаружи это дырка, и
-        # увидеть её иначе нечем — сетка после булевого всё равно замкнута.
+        # A socket that removed noticeably less than its own volume has broken
+        # through the wall: part of the cutter passed outside the body. From
+        # outside that is a hole, and nothing else reveals it - the mesh stays
         warn = ''
         if full > 0 and vi < 0.92 * full:
             warn = (f'  ← ВНИМАНИЕ: резец ушёл из тела на '
@@ -305,10 +303,10 @@ def run_in_blender(argv):
               f'(в резце было {было}), осталось {v:.2f} см3, '
               f'открытых рёбер {op}{warn}')
 
-    # Ниша готова — теперь доказать, что она именно ниша, а не сквозная
-    # дыра и не подкоп под наружную поверхность. Оба ответа даёт то же
-    # булево пересечение, что и при выборе: сколько материала детали
-    # попадает в пробный объём.
+    # The socket exists - now prove it is a socket and not a through hole or an
+    # undercut beneath the outer surface. Both answers come from the same
+    # boolean intersection used to choose it: how much of the part's material
+    # falls inside a probe volume.
     if made_joints:
         print('проверка готовых ниш:')
     for a, b, j, hs in made_joints:
@@ -316,14 +314,14 @@ def run_in_blender(argv):
             t = objs[h["part"]]
             sz, dp, sh = h["size"], h["deep"], h["shape"]
             d = [h["way"] * x for x in h["d"]]
-            # 1. дно: слой толщиной wall сразу за нишей обязан быть полным
+            # 1. floor: a layer of thickness wall right behind the socket must be full
             wall = 1.2
             flo = solid(h["p"], d, dp + 0.15, dp + 0.15 + wall, sz, sh)
             vf = material(t, flo)
             bpy.data.objects.remove(flo, do_unlink=True)
             need_f = (sz * sz if sh == 'rect' else 3.14159 * sz * sz / 4) * wall / 1000
-            # 2. стенка: короб шире ниши на wall с каждой стороны; ниша в нём
-            #    пустая, значит материала обязано быть ровно на разницу объёмов
+            # 2. wall: a box wider than the socket by wall on each side; the socket
+            #    inside it is empty, so the material must equal the volume difference
             big = solid(h["p"], d, 0.15, dp - 0.15, sz + 2 * wall, sh)
             vw = material(t, big)
             bpy.data.objects.remove(big, do_unlink=True)
@@ -363,7 +361,7 @@ def run_in_blender(argv):
             f'{g.get("size", g.get("dia"))}×{g["len"]} — {g["n"]} шт' for g in dw))
 
 
-# ============================ запуск снаружи Blender ============================
+# ============================ invocation outside Blender ============================
 
 def main():
     if len(sys.argv) < 2:

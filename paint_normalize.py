@@ -1,23 +1,23 @@
 #!/usr/bin/env python3
-"""Дописывает paint_color грани, у которой его нет, кодом экструдера объекта.
+"""Write paint_color onto faces that have none, using the object's extruder code.
 
-Грань без атрибута — «состояние 0»: слайсер печатает её филаментом, который
-назначен объекту в `<metadata key="extruder">`. Соглашение знает только
-слайсер. Аддон Blender `ThreeMF_io` отдавал такие грани первому попавшемуся
-материалу, и фон фигурки красился чужим цветом. Оригиналы с MakerWorld несут
-код на каждой грани без исключения — этот скрипт приводит файл к тому же виду.
+A face without the attribute is "state 0": the slicer prints it with the
+filament assigned to the object in `<metadata key="extruder">`. Only the
+slicer knows that convention. The Blender addon `ThreeMF_io` gave such faces
+to whichever material came first, and a figure's background got the wrong
+colour. MakerWorld originals carry a code on every face; this does the same.
 
-    python3 tools/paint_normalize.py вход.3mf выход.3mf
+    python3 tools/paint_normalize.py in.3mf out.3mf
 
-Геометрия, настройки и все прочие записи архива копируются дословно; трогаются
-только строки `<triangle .../>` внутри `*.model`. После записи скрипт сам
-сверяет вход и выход потреугольно и валится с ненулевым кодом, если что-то
-разошлось: проверка не опция.
+Geometry, settings and every other archive entry are copied verbatim; only
+the `<triangle .../>` lines inside `*.model` are touched. After writing, the
+script compares input and output triangle by triangle itself and exits
+non-zero if anything diverged: the check is not optional.
 
-Печать меняется на доли процента — Bambu ведёт состояние 0 и явный экструдер 1
-разными ветками сегментации, границы цвета двигаются на доли ширины линии.
-Замер на Датче: 172,02 -> 172,57 г, смен филамента 543 -> 542. Разбор —
-в скилле 3mf-paint, references/paint-format.md.
+The print changes by a fraction of a percent — Bambu runs state 0 and an
+explicit extruder 1 through different segmentation branches, so colour
+borders shift by fractions of a line width. Measured on Dutch: 172.02 ->
+172.57 g, filament changes 543 -> 542. Details: 3mf-paint/paint-format.md.
 """
 
 import re
@@ -31,17 +31,17 @@ HAS_PAINT = b"paint_color="
 CODE_RE = re.compile(rb'paint_color="([0-9A-Fa-f]+)"')
 MAX_FILAMENT = 17
 
-# Экструдер объекта верхнего уровня. Если он окажется ещё и на part — скрипт
-# откажется работать, а не покрасит фон наугад.
+# Extruder of the top-level object. Should one also sit on a part, the script
+# refuses to run rather than painting the background at random.
 OBJECT_RE = re.compile(rb"<object\s[^>]*>(.*?)</object>", re.S)
 EXTRUDER_RE = re.compile(rb'<metadata\s+key="extruder"\s+value="(\d+)"\s*/>')
 PART_RE = re.compile(rb"<part\s.*?</part>", re.S)
 
 
 def paint_code(filament: int) -> bytes:
-    """Код paint_color для «грань целиком покрашена филаментом N», N с единицы.
+    """paint_color code for "whole face painted with filament N", N from 1.
 
-    Вывод кодировки — в шапке tools/make_multicolor_3mf.py.
+    The encoding is spelled out in the header of make_multicolor_3mf.py.
     """
     if not 1 <= filament <= MAX_FILAMENT:
         raise ValueError(f"номер филамента вне диапазона 1..{MAX_FILAMENT}: {filament}")
@@ -51,7 +51,7 @@ def paint_code(filament: int) -> bytes:
 
 
 def code_to_filament(code: bytes, base: int):
-    """Номер филамента по коду; None — грань, дроблённая кистью на части."""
+    """Filament number from a code; None means a face split up by the brush."""
     if not code:
         return base
     if code == b"4":
@@ -64,7 +64,7 @@ def code_to_filament(code: bytes, base: int):
 
 
 def default_extruder(zin: zipfile.ZipFile) -> int:
-    """Филамент, которым печатается грань без paint_color."""
+    """The filament a face without paint_color is printed with."""
     cfg = zin.read("Metadata/model_settings.config")
     objects = OBJECT_RE.findall(cfg)
     if len(objects) != 1:

@@ -1,107 +1,83 @@
 #!/usr/bin/env python3
-"""Шаровые шарниры в чужой модели: найти, обмерить, восстановить, проверить сборку.
+"""Ball joints in a foreign model: find, measure, restore, verify assembly.
 
-Фигурки, которые приходят уже нарезанными на детали (MakerWorld, hi3d, tripo),
-почти всегда собраны на шар-и-гнездо. Посадку там задал автор, и она уже
-вылизана: шар и устье гнезда подогнаны с натягом в считаные сотки. Переделывать
-её нельзя — можно только **измерить и восстановить**, если гнездо забито
-мусором после реза или после пересборки сетки.
-
-Разобрано 21.09.2026 на фигурке Dutch van der Linde: семь гнёзд в торсе,
-у трёх внутри лежали плоские лоскуты от реза, и голова с ногами не вставлялись.
-Я тогда решил, что виновато узкое устье, и раскрыл каналы до Ø5.5 — то есть
-выбросил авторскую посадку. Правку отвергли, и правильно: замер показал,
-что устье ни при
-чём: шар Ø5.257, устье Ø5.22, натяг 37 мкм, всё сходится, а мешал мусор.
+Figurines that arrive already cut into parts are almost always assembled on
+ball-and-socket joints. The author set that fit and it is already tuned - ball
+and socket mouth are matched to an interference of a few hundredths. **Do not
+redesign it.** Measure it, and restore a socket only when it is clogged with
+debris from a cut or from a mesh rebuild. A socket that will not accept its
+ball is far more often full of flat scraps than too narrow.
 
     UV="uv run --quiet --with numpy --with scipy --with trimesh --with rtree python"
-
-    $UV tools/balljoint.py find    проект.3mf
-    $UV tools/balljoint.py profile проект.3mf --object 6 --socket=-15.40,-0.06,2.62 -o work/prof.json
+    $UV tools/balljoint.py find    project.3mf
+    $UV tools/balljoint.py profile project.3mf --object 6 --socket=-15.40,-0.06,2.62 -o work/prof.json
     $UV tools/balljoint.py cutter  work/prof.json -o work/cutter.stl
+    $UV tools/balljoint.py fit     project.3mf --torso 6
 
-Координаты с минусом argparse примет только через `=`: `--socket=-15.4,-0.1,2.6`.
-    $UV tools/balljoint.py fit     проект.3mf --torso 6
+argparse accepts negative coordinates only through `=`.
 
-## 1. Искать сферы голосованием по нормалям, а не кольцами в сечениях
+## 1. Find spheres by voting on normals, not by rings in sections
 
-Для грани с центром `p` и единичной нормалью `n` центр сферы радиуса `r` лежит
-в `p + r·n` (вогнутая сфера — гнездо) или `p − r·n` (выпуклая — шар). Перебрать
-`r`, проголосовать в решётку с весом «площадь грани», взять корзины, набравшие
-заметную долю от `4πr²`. Дальше уточнить центр и радиус МНК по `|p−c| = r`.
+For a face with centre `p` and unit normal `n`, the centre of a sphere of
+radius `r` lies at `p + r*n` for a concave sphere (a socket) or `p - r*n` for a
+convex one (a ball). Sweep `r`, vote into a lattice weighted by face area, and
+keep the bins holding a sizeable share of `4*pi*r^2`; then refine centre and
+radius by least squares.
 
-Так находятся **все** шарниры разом, с радиусом до микрон. На Dutch семь шаров
-деталей дали один и тот же радиус 2.6287 с невязкой 3 мкм — это примитив,
-поставленный автором семь раз, и по такому совпадению сразу видно, что посадка
-задумана единой.
+This finds **all** the joints at once, to micron radii. Identical radii across
+several joints mean the author placed one primitive repeatedly, which is itself
+proof that the fit was designed as a single thing.
 
-Поиск колец во внутренних сечениях, которым я пользовался раньше, дал два
-ложных гнезда из семи: бедренные оказались смещены на 2.8 мм, каналы ушли
-в сплошное бедро, а настоящие гнёзда остались забитыми.
+**Searching for rings in internal sections produces false sockets** whose
+channels run into solid material while the real sockets stay clogged.
 
-## 2. Мерить гнездо лучами с оси, а не «свободным диаметром»
+## 2. Measure a socket with rays from its axis, not by "free diameter"
 
-Из точек на оси гнезда пускаются лучи наружу по кругу; первое попадание и есть
-стенка. Получается `r(глубина, угол)`. Если гнездо — тело вращения, разброс по
-углу мал (на Dutch межквартиль 0.00–0.02 мм), и тогда профиль можно
-воспроизвести точно.
+Cast rays outwards in a circle from points on the socket axis; the first hit is
+the wall. That yields `r(depth, angle)`. A small spread over angle means the
+socket is a solid of revolution and its profile can be reproduced exactly.
 
-Метрика «свободный радиус вокруг оси» на этой задаче врёт: она показывала
-Ø3.90 там, где не проходило вообще ничего, потому что канал был прорезан мимо.
+A "free radius around the axis" metric lies here: it reports a healthy diameter
+where nothing passes at all, because the channel was cut past the socket.
 
-**Ловушка:** луч, пущенный ниже дна сферы, улетает мимо и ловит дальнюю стенку
-детали. У Dutch профиль головы на глубине ниже −2.75 мм давал 8 мм вместо нуля;
-резак, построенный по сырым замерам, вышел диском и выгрыз плиту из шеи.
-Поэтому низ гнезда здесь всегда строится аналитической сферой, подогнанной
-по участку, где замеры ещё достоверны.
+**Trap: a ray cast below the bottom of the sphere flies past it and hits the
+far wall of the part**, reporting a huge radius. A cutter built from such raw
+readings comes out as a disc and gouges a slab out of the part. The bottom of a
+socket is therefore always built from an analytic sphere fitted to the depth
+range where the readings are still trustworthy.
 
-## 3. Восстанавливать телом вращения по измеренному профилю
+## 3. Restore with a solid of revolution built from the measured profile
 
-Резак — «латунь»: кольца по измеренной кривой, апекс снизу, продолжение
-цилиндром наружу, чтобы канал вышел на поверхность. Вычитается булевой
-операцией из герметичной детали.
+The cutter is rings along the measured curve, an apex at the bottom, continued
+outwards as a cylinder so the channel reaches the surface. Subtract it from a
+watertight part with a boolean.
 
-Проверка после реза — сверка стенки **луч в луч** с оригиналом: для каждой
-пары (глубина, угол) сравнить радиус до и после. На Dutch вышло: медиана
-отклонения 0…+60 мкм, у плеча 94 % лучей в пределах 50 мкм.
+**Verify ray by ray against the original**: for every (depth, angle) pair
+compare the radius before and after.
 
-## 4. Проверять сборку пересечением объёмов, а не на глаз
+## 4. Verify assembly by intersecting volumes, not by eye
 
-Занятость торса считается один раз в воксельную решётку, внутрь кладётся
-карта глубины (`distance_transform_edt`). Деталь ставится в позу и её
-поверхность опрашивается точками — это быстро, и сразу видно, на сколько
-миллиметров деталь лезет в тело.
+Torso occupancy is computed once into a voxel lattice with a distance map
+inside. A part is placed in a pose and its surface sampled, which shows
+directly how many millimetres it intrudes.
 
-**Поза шарнира — не одна.** Шар в гнезде оставляет детали свободу качания;
-у детали с одним шаром это три степени свободы, у руки с двумя шарами —
-одна (вращение вокруг линии шар-шар). Поэтому меряется не «есть пересечение
-или нет», а «есть ли поза без пересечения». Свобода перебирается.
+**A joint has more than one pose.** A ball in a socket leaves the part free to
+swing: three degrees of freedom with one ball, one with two balls. So the
+question is not whether an intersection exists but whether **a pose without one
+exists**; sweep the freedom.
 
-**Гнёзда раздавать глобально, а не жадно.** Сперва разбираются детали с двумя
-шарами: расстояние между шарами почти однозначно называет пару гнёзд (на Dutch
-сошлось до 0.008 и 0.016 мм). Одношаровые детали потом раскладываются по
-остатку венгерским алгоритмом по матрице «пересечение при лучшей позе».
-Жадная раздача по порядку объектов на Dutch посадила **ногу в гнездо кисти**
-(ось шейки у них похожа), после чего вся остальная раскладка поехала, и ноги
-показывали 55–80 мм² пересечения глубиной до 2.5 мм. С глобальным назначением
-те же ноги дают 19–30 мм² и ничего глубже 0.9 мм.
+**Assign sockets globally, not greedily.** Resolve two-ball parts first - the
+distance between their balls names the socket pair almost uniquely - then
+distribute single-ball parts over the remainder with the Hungarian algorithm on
+a matrix of best-pose intersection. Greedy assignment in object order puts a
+leg into a wrist socket and everything after it slides.
 
-**Пару шар↔гнездо у детали с двумя шарами тоже перебирать в обе стороны:**
-если перепутать, какой шар плечевой, рука встанет задом наперёд — 44 мм²
-пересечения глубиной до 1.6 мм, которые пропадают при правильной паре.
+**Try both ways round for a two-ball part as well**: swapping which ball is the
+shoulder puts the limb on backwards, which shows up as a large intersection
+that vanishes with the correct pairing.
 
-Точки в пределах 4.2 мм от центра гнезда в счёт не идут — там шар и обязан
-быть внутри тела.
-
-**Чем мерить результат.** Не «есть пересечение / нет», а площадь поверхности
-детали глубже порога: 0.25 мм — это уже больше вокселя и больше допуска
-печати, 1.0 мм — деталь заведомо не сядет. Контакт соприкасающихся
-поверхностей всегда даёт единицы мм² на глубине до 0.3 мм, и это норма.
-
-**Контроль, что ты не сломал модель сам:** прогнать те же позы против
-ИСХОДНОГО файла человека. На Dutch ноги дали 21.7 и 20.1 мм² против его
-торса и 18.5 и 30.3 мм² против пересобранного — то есть пересечение
-принадлежит модели, а не ремонту.
+Points within the socket radius of its centre do not count - the ball is
+supposed to be inside the body there.
 """
 import argparse, json, re, sys, zipfile
 import numpy as np
@@ -110,7 +86,7 @@ VERT = re.compile(r'<vertex x="([^"]*)" y="([^"]*)" z="([^"]*)"\s*/>')
 TRI = re.compile(r'<triangle v1="(\d+)" v2="(\d+)" v3="(\d+)"')
 
 
-# ---------------------------------------------------------------- чтение
+# ---------------------------------------------------------------- reading
 def entries(z):
     """Соответствие id объекта -> запись .model, по 3D/_rels."""
     rels = z.read('3D/_rels/3dmodel.model.rels').decode()
@@ -437,11 +413,11 @@ def cmd_fit(a):
 
     report = []
     asm = [(tV, tF)] if a.assembly else []
-    # Детали с двумя шарами разбираются первыми: расстояние между шарами
-    # почти однозначно указывает пару гнёзд. Оставшиеся одношаровые детали
-    # раскладываются по оставшимся гнёздам ГЛОБАЛЬНО, венгерским алгоритмом
-    # по матрице «пересечение при лучшей позе»: жадная раздача путает ногу
-    # с кистью, если ось шейки у них похожа.
+    # Two-ball parts are resolved first: the distance between the balls names
+    # the socket pair almost uniquely. The remaining single-ball parts are then
+    # distributed over the remaining sockets GLOBALLY, with the Hungarian
+    # algorithm on a best-pose intersection matrix: greedy assignment confuses
+    # a leg with a wrist when their neck axes are similar.
     from scipy.optimize import linear_sum_assignment
     parts = []
     for oid in ids:

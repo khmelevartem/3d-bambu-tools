@@ -1,20 +1,20 @@
 #!/usr/bin/env python3
-"""Назначить объектам проекта филамент, которым они печатаются.
+"""Assign each project object the filament it is printed with.
 
-Какой филамент возьмёт объект, решает ключ `extruder` в
-`Metadata/model_settings.config` — номер слота, а не покраска по треугольникам.
-После импорта STL Bambu Studio ставит всем единицу, и разложенные по пластинам
-одноцветные детали печатаются одним цветом.
+Which filament an object takes is decided by the `extruder` key in
+`Metadata/model_settings.config` — a slot number, not per-triangle paint.
+After an STL import Bambu Studio sets every object to 1, and single-colour
+parts laid out across plates all print in the same colour.
 
-По умолчанию номер берётся из имени: `filament4.stl_2` → филамент 4. Так
-называет детали `paint_split.py`, и после «Разделить на объекты» имя
-наследуется. Что не разобралось по имени — задаётся руками.
+By default the number comes from the name: `filament4.stl_2` -> filament 4.
+That is how `paint_split.py` names its parts, and the name survives
+"Split to objects". Whatever the name does not resolve is set by hand.
 
-    uv run --quiet python tools/set_extruder.py проект.3mf готово.3mf
-    uv run … python tools/set_extruder.py проект.3mf готово.3mf --set 18=3 --set 22=5
+    uv run --quiet python tools/set_extruder.py project.3mf done.3mf
+    uv run … python tools/set_extruder.py project.3mf done.3mf --set 18=3 --set 22=5
 
-Остальное содержимое 3MF переписывается байт в байт: сетки, покраска,
-настройки печати и раскладка по пластинам не трогаются.
+The rest of the 3MF is rewritten byte for byte: meshes, paint, print
+settings and the plate layout are left alone.
 """
 import argparse, re, shutil, sys, zipfile
 
@@ -54,7 +54,7 @@ def main():
         plan.append((oid, nm, f))
         body = re.sub(r'(key="extruder" value=")[^"]*(")', rf'\g<1>{f}\g<2>', body,
                       count=1)
-        if not old:                      # объекта без ключа не бывает, но пусть
+        if not old:                      # an object without the key should not exist
             body = f'\n    <metadata key="extruder" value="{f}"/>' + body
         return f'<object id="{oid}">{body}</object>'
 

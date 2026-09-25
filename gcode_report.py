@@ -1,28 +1,28 @@
 #!/usr/bin/env python3
-"""Разбор нарезанного G-кода по типам линий: сколько граммов и времени
-на что ушло, и есть ли в печати поддержки.
+"""Break sliced G-code down by line type: how many grams and how much time
+went where, and whether the print has supports.
 
-Зачем отдельный скрипт. Вес и время, которые печатает slice.sh, — это итог
-по всей печати, и по нему не видно главного: включены ли поддержки. Один
-раз это уже стоило кривой детали (12.09.2026, переключатель жд: 32 г без
-поддержек вместо 36 г с ними). Здесь считается то, что реально записано
-в G-коде, а не то, что стоит в профиле.
+Why a separate script. The weight and time slice.sh prints are totals for
+the whole print, and they hide the thing that matters most: whether
+supports are on. That has already cost one warped part (2026-09-12, a rail
+switch: 32 g without supports instead of 36 g with them). What is counted
+here is what the G-code actually contains, not what the profile says.
 
     python3 tools/gcode_report.py out/plate_1.gcode
 
-Работает с любым G-кодом Bambu Studio — и от slice.sh, и от нарезки
-чужого проекта .3mf его собственным профилем.
+Works with any Bambu Studio G-code — from slice.sh, and from slicing
+someone else's .3mf project with its own profile.
 
-Как считается вес. Bambu пишет экструзию в относительных координатах
-(M83), поле E — длина проглоченного филамента в мм. Объём — длина на
-площадь сечения прутка, дальше на плотность. Диаметр и плотность берутся
-из шапки самого G-кода (`; filament_diameter`, `; filament_density`),
-поэтому для Matte (1.32) и для Basic (1.26) выходят разные граммы.
-Считаются только ходы с перемещением по X/Y: ретракт и его возврат
-филамент не тратят.
+How the weight is computed. Bambu writes extrusion in relative coordinates
+(M83), so the E field is the length of filament swallowed, in mm. Volume is
+that length times the cross-section of the strand, then times density.
+Diameter and density are read from the G-code's own header
+(`; filament_diameter`, `; filament_density`), so Matte (1.32) and Basic
+(1.26) come out at different grams. Only moves that travel in X/Y count:
+a retract and its return spend no filament.
 
-Время — из result.json рядом с G-кодом (feature_type_times, секунды),
-если он есть. Ключи там те же, что в `; FEATURE:`.
+Time comes from result.json next to the G-code (feature_type_times,
+seconds), when it is there. Its keys are the same as in `; FEATURE:`.
 """
 import json
 import pathlib
@@ -33,7 +33,7 @@ SUPPORT_FEATURES = ("Support", "Support interface")
 
 
 def parse(path):
-    """-> (граммы по фичам, плотность, диаметр, итоговая строка времени)"""
+    """-> (grams per feature, density, diameter, total time string)"""
     feat = "Undefined"
     mm = {}
     density, diameter, eta = 1.26, 1.75, None
@@ -52,18 +52,18 @@ def parse(path):
             if not line.startswith(("G1", "G2", "G3")):
                 continue
             if "X" not in line and "Y" not in line:
-                continue            # ретракт/возврат — движения нет
+                continue            # retract/return — no movement
             if m := re.search(r"\sE(-?[\d.]+)", line):
                 e = float(m.group(1))
                 if e > 0:
                     mm[feat] = mm.get(feat, 0.0) + e
-    area = 3.141592653589793 * (diameter / 2) ** 2      # мм²
+    area = 3.141592653589793 * (diameter / 2) ** 2      # mm^2
     grams = {k: v * area * density / 1000 for k, v in mm.items()}
     return grams, density, diameter, eta
 
 
 def seconds_by_feature(gcode):
-    """feature_type_times из result.json рядом с G-кодом, если он есть."""
+    """feature_type_times from result.json next to the G-code, if present."""
     for p in (gcode.parent / "result.json",):
         if p.exists():
             r = json.loads(p.read_text())

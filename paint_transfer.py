@@ -1,28 +1,25 @@
 #!/usr/bin/env python3
-"""Перенести покраску со старой сетки на новую по геометрии.
+"""Move paint from an old mesh onto a new one, by geometry.
 
-Недостающее звено между ремонтом и покраской. Ремонт строит треугольники
-заново, а `paint_color` привязан к номеру треугольника в списке — после
-починки привязка бессмысленна. Здесь цвет берётся не по номеру, а по месту:
-для каждой новой грани ищется ближайшая точка на старой поверхности.
+The missing link between repair and paint. Repair rebuilds the triangles, and
+`paint_color` is bound to a triangle's index, so the binding is meaningless
+afterwards. Here the colour is taken by position instead: for every new face,
+the nearest point on the old surface.
 
-Выравнивание границ и запись делает tools/paint.py, а не этот файл.
+Border smoothing and writing back are done by tools/paint.py, not here.
 
     UV="uv run --quiet --with numpy --with scipy --with PyMaxflow python"
-
-    $UV tools/paint.py parse  оригинал.3mf    work/old.npz
-    $UV tools/paint.py parse  починенный.3mf  work/new.npz
+    $UV tools/paint.py parse  original.3mf work/old.npz
+    $UV tools/paint.py parse  fixed.3mf    work/new.npz
     $UV tools/paint_transfer.py work/old.npz work/new.npz work/moved.npz
     $UV tools/paint.py smooth work/moved.npz work/smooth.npz --band 4 --lam 1.0 --core 3
-    $UV tools/paint.py write  починенный.3mf work/smooth.npz готовый.3mf
+    $UV tools/paint.py write  fixed.3mf work/smooth.npz ready.3mf
 
-Про ручную кисть. Составной код (`1C01C1C3`) — это дерево разбиения ИМЕННО
-того треугольника, на котором он стоит: его вершины, его порядок обхода.
-На другую грань он не переносится ни при каких условиях, декодируй его или
-нет. Поэтому дроблёные грани исключаются из источника, и приёмник берёт цвет
-у ближайшей одноцветной. Подтреугольная точность ручной кисти теряется — она
-и не могла пережить перестройку сетки. Выравниванием потом граница садится
-на геометрическое ребро, что для сопла 0.4 и есть предел.
+A composite code is the subdivision tree of the particular triangle it sits on,
+and it cannot be carried to another face under any circumstances. Split faces
+are therefore excluded from the source, and the target takes its colour from
+the nearest single-colour face; sub-triangle precision does not survive a mesh
+rebuild.
 """
 import sys, argparse
 import numpy as np
@@ -53,17 +50,17 @@ def point_tri_dist2(P, A, B, C):
     denom = va + vb + vc
     denom = np.where(np.abs(denom) < 1e-30, 1e-30, denom)
 
-    Q = A + AB * (vb / denom)[:, None] + AC * (vc / denom)[:, None]   # внутри
-    m = (d1 <= 0) & (d2 <= 0);                       Q[m] = A[m]      # вершина A
-    m = (d3 >= 0) & (d4 <= d3);                      Q[m] = B[m]      # вершина B
-    m = (d6 >= 0) & (d5 <= d6);                      Q[m] = C[m]      # вершина C
-    m = (vc <= 0) & (d1 >= 0) & (d3 <= 0)                             # ребро AB
+    Q = A + AB * (vb / denom)[:, None] + AC * (vc / denom)[:, None]   # interior
+    m = (d1 <= 0) & (d2 <= 0);                       Q[m] = A[m]      # vertex A
+    m = (d3 >= 0) & (d4 <= d3);                      Q[m] = B[m]      # vertex B
+    m = (d6 >= 0) & (d5 <= d6);                      Q[m] = C[m]      # vertex C
+    m = (vc <= 0) & (d1 >= 0) & (d3 <= 0)                             # edge AB
     t = np.zeros(len(P)); dd = d1 - d3; dd[dd == 0] = 1e-30
     t[m] = (d1 / dd)[m];                             Q[m] = (A + AB * t[:, None])[m]
-    m = (vb <= 0) & (d2 >= 0) & (d6 <= 0)                             # ребро AC
+    m = (vb <= 0) & (d2 >= 0) & (d6 <= 0)                             # edge AC
     t = np.zeros(len(P)); dd = d2 - d6; dd[dd == 0] = 1e-30
     t[m] = (d2 / dd)[m];                             Q[m] = (A + AC * t[:, None])[m]
-    m = (va <= 0) & ((d4 - d3) >= 0) & ((d5 - d6) >= 0)               # ребро BC
+    m = (va <= 0) & ((d4 - d3) >= 0) & ((d5 - d6) >= 0)               # edge BC
     t = np.zeros(len(P)); dd = (d4 - d3) + (d5 - d6); dd[dd == 0] = 1e-30
     t[m] = ((d4 - d3) / dd)[m];                      Q[m] = (B + (C - B) * t[:, None])[m]
 

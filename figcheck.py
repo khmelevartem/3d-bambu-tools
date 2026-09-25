@@ -3,31 +3,31 @@
 # requires-python = ">=3.11"
 # dependencies = ["trimesh", "numpy", "scipy", "networkx", "rtree", "shapely", "manifold3d"]
 # ///
-"""Разбор органической модели (фигурки) перед печатью на A1.
+"""Analyse an organic model (a figurine) before printing.
 
-printcheck.py отвечает на вопрос «это вообще корректная сетка». Этот скрипт
-отвечает на четыре других, которые у фигурок решают всё:
+printcheck.py answers whether the mesh is correct. This answers four questions
+that decide everything on a figurine:
 
-    1. на чём деталь стоит — площадь первого слоя и число пятен;
-    2. на какой высоте резать плоское дно, чтобы стенки над срезом
-       не оказались свесом;
-    3. нужны ли поддержки «везде» или хватит «только от стола»;
-    4. что даст уменьшение высоты слоя — карта ступенек по площади.
+    1. what the part stands on - first-layer area and the number of patches;
+    2. at what height to cut a flat bottom so the wall above the cut is not
+       itself an overhang;
+    3. whether supports are needed everywhere or only from the build plate;
+    4. what a finer layer would buy - a map of stair steps by area.
 
-    uv run tools/figcheck.py модель.stl
-    uv run tools/figcheck.py модель.stl --layers 0.20 0.12 0.08
-    uv run tools/figcheck.py модель.stl --rx 15        # то же в наклонённой позе
+    uv run tools/figcheck.py model.stl
+    uv run tools/figcheck.py model.stl --layers 0.20 0.12 0.08
+    uv run tools/figcheck.py model.stl --rx 15        # the same in a tilted pose
 
-Углы везде считаются ОТ ГОРИЗОНТАЛИ: 90° — грань смотрит прямо вниз
-(худший свес), 0° — вертикальная стенка. У Bambu в `support_threshold_angle`
-обратное соглашение («угол наклона»), пересчёт: порог = 90 − наш угол.
+Angles are counted FROM THE HORIZONTAL: 90 means the face points straight down
+(the worst overhang), 0 is a vertical wall. Bambu's `support_threshold_angle`
+uses the opposite convention: threshold = 90 - ours.
 """
 import argparse, sys
 import numpy as np
 import trimesh
-import hardware                 # ширина линии и слой — из hardware.json
+import hardware                 # line width and layer come from hardware.json
 
-NOZZLE_LINE = hardware.line_width()   # ширина линии внешнего периметра у профиля сопла
+NOZZLE_LINE = hardware.line_width()   # outer perimeter line width of the nozzle profile
 
 
 def contour_stats(m, z):
@@ -49,8 +49,8 @@ def main():
     a = ap.parse_args()
 
     m = trimesh.load(a.stl, process=True)
-    # Наклон применяется ДО постановки на ноль: все числа ниже — про ту
-    # ориентацию, в которой деталь реально поедет на стол.
+    # The tilt is applied BEFORE setting the part down: every number below
+    # describes the orientation the part will actually print in.
     for ang, axis in ((a.rx, [1, 0, 0]), (a.ry, [0, 1, 0])):
         if ang:
             m.apply_transform(trimesh.transformations.rotation_matrix(
@@ -61,14 +61,14 @@ def main():
           f"{ext[0]:.1f} x {ext[1]:.1f} x {ext[2]:.1f} мм, объём {m.volume/1000:.1f} см³")
     print(f"  замкнутость {m.is_watertight}, тел {m.body_count}, эйлер {m.euler_number}")
 
-    # 1. на чём стоит
+    # 1. what it stands on
     print("\n--- ОПОРА НА СТОЛ")
     area, n, _ = contour_stats(m, 0.05)
     print(f"  первый слой: {area:.1f} мм² в {n} пятнах")
     if area < 100:
         print("  !! меньше 100 мм² — деталь стоит почти в точку, нужен плоский срез дна")
 
-    # 2. где резать: угол стенки сразу над срезом
+    # 2. where to cut: the wall angle immediately above the cut
     print("\n--- ВЫБОР ВЫСОТЫ СРЕЗА ДНА")
     print(f"  {'рез':>6} {'опора':>9} {'пятен':>6} {'стенка над срезом':>19}")
     for c in a.cuts:
@@ -76,13 +76,13 @@ def main():
         A1, _, _ = contour_stats(m, c + 0.5)
         if per == 0:
             continue
-        # расширение контура по радиусу на 1 мм высоты -> угол стенки от горизонтали
+        # contour growth per 1 mm of height -> wall angle from the horizontal
         dr = (A1 - A0) / 0.5 / per
         ang = np.degrees(np.arctan2(1.0, max(dr, 1e-6)))
         mark = "" if ang >= 55 else "   <- свес, резать выше"
         print(f"  {c:6.2f} {A0:8.0f} мм² {n0:5d} {ang:16.0f}°{mark}")
 
-    # 3. поддержки: куда они упрутся
+    # 3. supports: what they will rest on
     print("\n--- СВЕСЫ И ПОДДЕРЖКИ")
     nrm, ar, cen = m.face_normals, m.area_faces, m.triangles_center
     ang = np.degrees(np.arcsin(np.clip(-nrm[:, 2], -1, 1)))
@@ -104,7 +104,7 @@ def main():
         if on_model / ar[sel].sum() > 0.15:
             print("  !! «Поддержка только от стола» оставит эти площади без поддержки")
 
-    # 4. слоистость
+    # 4. stair stepping
     print("\n--- СТУПЕНЬКИ НА ПОВЕРХНОСТИ (ширина = высота слоя / tg наклона)")
     slope = np.degrees(np.arccos(np.clip(np.abs(nrm[:, 2]), 0, 1)))
     print(f"  {'слой':>6} {'<0.1 мм':>9} {'0.1-0.2':>9} {'0.2-0.4':>9} {'>0.4 мм':>9}"
@@ -115,7 +115,7 @@ def main():
         for loq, hiq in [(0, .1), (.1, .2), (.2, .4), (.4, 1e9)]:
             s = (step >= loq) & (step < hiq)
             row.append(100 * ar[s].sum() / tot)
-        # порог, при котором соседние линии перекрываются хотя бы наполовину
+        # the threshold at which neighbouring lines overlap by at least half
         thr = np.degrees(np.arctan2(lh, NOZZLE_LINE / 2))
         print(f"  {lh:6.2f} " + " ".join(f"{x:8.1f}%" for x in row) + f" {thr:16.0f}°")
     print("  порог поддержки — это значение support_threshold_angle: при нём шаг стенки\n"

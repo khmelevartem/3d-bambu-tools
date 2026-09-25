@@ -1,62 +1,57 @@
 #!/usr/bin/env python3
-"""Разрезать покрашенный 3MF на отдельные детали по филаментам.
+"""Split a painted 3MF into separate parts, one per filament.
 
-Смысл: вместо смен филамента внутри одной печати печатать каждый цвет
-отдельной деталью и склеивать. Экономит промывку и башню очистки, но взамен
-даёт шов по каждой границе цвета — поэтому сначала `plan`, и только потом
-`cut`.
+Instead of changing filament inside one print, print each colour as its own
+part and glue them. That saves the flushing and the prime tower, at the cost of
+a seam along every colour border - so run `plan` first and `cut` only after.
 
-Режется не объём, а поверхность: куски одного цвета вырезаются из сетки и
-закрываются крышкой — веером на общую вершину внутри тела. Наружная
-поверхность при этом не трогается вовсе, деталь получается точной снаружи
-и плоской по разрезу. Стенки у детали нет: это замкнутая скорлупа, и
-слайсер печатает её сплошной, как обычное тело.
+What is cut is the surface, not the volume: pieces of one colour are carved out
+of the mesh and capped with a fan onto a shared vertex inside the body. The
+outer surface is not touched at all, so a part is exact on the outside and flat
+across the cut. It has no wall thickness: it is a closed shell, and the slicer
+prints it solid like any other body.
 
-    uv run --quiet --with numpy --with scipy python tools/paint_split.py \\
+    uv run --quiet --with numpy --with scipy python tools/paint_split.py \
         plan work/p.npz --min-area 20
-    uv run … python tools/paint_split.py joints work/p.npz --emit work/j.json
-    uv run … python tools/paint_split.py cut work/p.npz work/parts --min-area 20
+    uv run ... python tools/paint_split.py joints work/p.npz --emit work/j.json
+    uv run ... python tools/paint_split.py cut work/p.npz work/parts --min-area 20
 
-`plan` печатает по каждому филаменту число кусков, площадь, крупнейший кусок,
-непечатаемую мелочь и длину шва — то есть цену резки в миллиметрах склейки.
+`plan` prints, per filament, the number of pieces, the area, the largest piece,
+the unprintable scraps and the seam length - the price of the split, in
+millimetres of gluing.
 
-`cut` пишет STL по филаменту и проверяет каждую деталь: замкнутость, объём,
-не вылезла ли крышка наружу и сходится ли сумма объёмов с исходной. Печатает
-ещё и среднюю толщину детали — по ней сразу видно, возможен ли на ней стык
-с нишей: ниша живёт в теле, а у цвета, размазанного пятном по поверхности,
-тела нет.
+`cut` writes one STL per filament and checks each part: closedness, volume,
+whether a cap poked through the outside, and whether the volumes still sum to
+the original. It also prints **the mean thickness of each part**, which shows
+at once whether a socketed joint is possible: a socket lives inside a body, and
+a colour smeared as a patch over the surface has no body.
 
-`joints` меряет каждый шов и называет те, что годятся в настоящий стык:
-петля почти лежит в плоскости, в сечение влезает штифт со стенкой, и по обе
-стороны хватает глубины. С ключом `--emit` пишет готовое задание для
-`tools/pivot_joint.py` — тот сверлит парные слепые ниши и печатает штифты
-отдельными телами.
+`joints` measures every seam and names the ones fit for a real joint: the loop
+nearly lies in a plane, a pin with a wall around it fits the section, and there
+is depth enough on both sides. With `--emit` it writes a ready job for
+`tools/pivot_joint.py`.
 
-`--plane-cut auto` переводит швы со стыком с контура цвета на плоскость:
-грани, которые плоскость пересекает, ею же и разрезаются. Без этого
-поверхность стыка повторяет нарисованную границу цвета и плоской не бывает,
-а две волнистые крышки, напечатанные слоями, друг к другу не прилегают.
-Ключ обязан быть одинаковый у `joints` и у `cut`: он меняет сетку.
+`--plane-cut auto` moves jointed seams from the colour contour onto a plane,
+cutting the faces the plane crosses. Without it the mating surface repeats the
+drawn colour border and is never flat, and two wavy caps printed in layers do
+not meet. **The key must be identical for `joints` and `cut`** - it changes the
+mesh.
 
-**Зачем это нужно.** Крышка на крышку не держится ничем: печать идёт слоями,
-у каждой крышки своя ступенчатая поверхность, и поймать взаимное положение
-деталей руками нечем. Ориентир — Funko Spider-Man с MakerWorld, разобранный
-21.09.2026: там у каждого стыка плоский рез, слепая ниша в обеих половинах
-и штифт отдельным телом, тоньше ниши на 0.2 мм и короче суммы глубин на
-миллиметр. Подробности, допуски и замеры — в скилле **3mf-paint**,
-`references/split-to-parts.md`.
+**Why a joint is needed at all.** A cap against a cap holds nothing: each has
+its own stepped surface and glue lets them set out of place. Every joint needs
+a flat cut, a blind socket in both halves and a pin.
 
-**Где стык неточен.** Крышка считается один раз на петлю и достаётся обеим
-соседним деталям, поэтому вдоль границы двух цветов они сходятся грань
-в грань. Но там, где сходятся три цвета, петли у соседей разные: у одной
-детали граница идёт вокруг обоих соседей сразу, у других — только по своему
-участку. Крышки в таком месте расходятся, и детали либо чуть налезают друг
-на друга, либо оставляют внутреннюю пустоту. Мера этого — строка «сумма
-деталей против исходных» в конце: на фигурке Робби расхождение 0.6 %,
-на Датче со стулом 1.8 %. На модели с частыми тройными точками резка
-по цвету не годится.
+**Where the joint is imprecise.** A cap is computed once per loop and given to
+both neighbouring parts, so along a two-colour border they meet face to face.
+Where three colours meet, the neighbours' loops differ, the caps diverge, and
+the parts either overlap slightly or leave an internal void. The measure of
+that is the "sum of parts against the original" line at the end. **On a model
+with frequent triple points, splitting by colour does not work.**
 
-Масштаб <build> берётся ключом --scale, как в paint_despeckle.py.
+The <build> scale is passed with --scale, as in paint_despeckle.py.
+
+Tolerances, orientation and infill: references/split-to-parts.md of the
+3mf-paint skill.
 """
 import argparse, os, struct, sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -65,7 +60,7 @@ import numpy as np
 import scipy.sparse as sp
 from scipy.sparse.csgraph import connected_components
 
-SPLIT = -1                      # грань, покрашенная кистью в несколько цветов
+SPLIT = -1                      # face painted with the brush in several colours
 
 
 def load(path, scale):
@@ -102,15 +97,15 @@ def absorb(lab, ea, eb, elen, area, bad_of, rounds=12):
         src = np.r_[cc[ea[bnd]], cc[eb[bnd]]]
         dst = np.r_[cc[eb[bnd]], cc[ea[bnd]]]
         ln = np.r_[elen[bnd], elen[bnd]]
-        # Сосед годится, если он сам не мелочь либо крупнее — иначе две мелкие
-        # соседки бесконечно меняются цветом местами.
+        # A neighbour qualifies when it is not itself a scrap, or is larger -
+        # otherwise two small neighbours swap colours forever.
         rank = A * nc + np.arange(nc)
         keep = (bad[src] & (clab[dst] > 0) & (clab[dst] != clab[src])
                 & (~bad[dst] | (rank[dst] > rank[src])))
         src, dst, ln = src[keep], dst[keep], ln[keep]
         if not len(src):
             break
-        # победитель по суммарной длине общей границы
+        # winner by total shared border length
         o = np.lexsort((dst, src))
         src, dst, ln = src[o], dst[o], ln[o]
         grp = np.r_[True, (src[1:] != src[:-1]) | (dst[1:] != dst[:-1])]
@@ -165,14 +160,14 @@ def loops_of(F, sel):
     берётся любой неиспользованный, петля всё равно замыкается."""
     f = F[sel]
     he = np.concatenate([f[:, [0, 1]], f[:, [1, 2]], f[:, [2, 0]]])
-    own = np.tile(sel, 3)                       # чья это грань
+    own = np.tile(sel, 3)                       # whose face this is
     key = he[:, 0].astype(np.int64) * (1 << 32) + he[:, 1]
     rev = he[:, 1].astype(np.int64) * (1 << 32) + he[:, 0]
     inner = np.isin(rev, key)
     bnd, bown = he[~inner], own[~inner]
     if not len(bnd):
         return []
-    # индекс выходов из вершины
+    # index of exits from a vertex
     o = np.argsort(bnd[:, 0], kind='stable')
     bs, bo = bnd[o], bown[o]
     starts = {}
@@ -214,10 +209,10 @@ def patch_axis(V, F, sel, area, nrm):
     d = n / ln
     c = nrm[sel] @ d
     A = area[sel]
-    # Доля площади, отвернувшейся от оси. Минимум по граням для этого не
-    # годится: одна шумная чешуйка после ремонта сетки обнуляет вердикт —
-    # у Робби кусок с +0.27 стал −0.97, не поменяв формы. Призме мешает
-    # не единичный треугольник, а заметная площадь поднутрения.
+    # Share of area turned away from the axis. A minimum over faces will not do:
+    # one noisy sliver left by a mesh repair zeroes the verdict without changing
+    # the shape. What obstructs a prism is a noticeable area of undercut, not a
+    # single triangle.
     back = float(A[c <= 0].sum() / A.sum())
     return d, back, float(A.sum())
 
@@ -241,7 +236,7 @@ def inward(P):
     e = B - A
     ln = np.linalg.norm(e, axis=1); ln[ln == 0] = 1
     e = e / ln[:, None]
-    nrm = np.c_[-e[:, 1], e[:, 0]]                 # нормаль ребра слева
+    nrm = np.c_[-e[:, 1], e[:, 0]]                 # edge normal, to the left
     s = np.sign(np.sum(A[:, 0] * B[:, 1] - B[:, 0] * A[:, 1]))
     nrm *= (s if s else 1.0)
     v = nrm + np.roll(nrm, 1, axis=0)
@@ -349,7 +344,7 @@ def build_part(V, F, sel, nrm=None, probe=None, cache=None,
         ci = nv
         nv += 1
         L = np.array(loop, np.int64)
-        # полуребро скорлупы идёт a→b, крышка обязана дать b→a
+        # a shell half-edge runs a->b, so the cap must give b->a
         tri = np.stack([np.roll(L, -1), L, np.full(len(L), ci)], axis=1)
         faces.append(tri)
         caps += len(L)
@@ -372,7 +367,7 @@ def inside(V, F, pts):
         T = P[m]
         if not len(T):
             continue
-        # барицентрические координаты точки в проекции на XY
+        # barycentric coordinates of the point projected onto XY
         a, b, c = T[:, 0, :2], T[:, 1, :2], T[:, 2, :2]
         d = ((b[:, 1] - c[:, 1]) * (a[:, 0] - c[:, 0]) +
              (c[:, 0] - b[:, 0]) * (a[:, 1] - c[:, 1]))
@@ -446,20 +441,20 @@ def report(lab, ea, eb, elen, area, fcol, title, speck=1.0):
     return nc, cc, A
 
 
-# ============================ швы как стыки деталей ============================
+# ============================ seams as part joints ============================
 #
-# Крышка по петле — ещё не стык. Две детали, сведённые крышка в крышку,
-# держатся только клеем и ничем не выровнены: печать слоями даёт на каждой
-# крышке свою ступенчатую поверхность, и поймать взаимное положение на глаз
-# нечем. Ориентир — фигурка Spider-Man с MakerWorld (разобрана 21.09.2026):
-# там каждый стык цветов сделан плоским резом поперёк конечности, в обеих
-# половинах слепая ниша, а штифт печатается отдельным телом.
+# A cap over a loop is not yet a joint. Two parts brought cap to cap are held
+# by glue alone and aligned by nothing: layered printing gives each cap its own
+# stepped surface, and their relative position cannot be caught by hand.
 #
-# Отсюда три вещи, которых у резки по цвету не было:
-#   1. петли шва надо померить и назвать те, что уже почти плоские, —
-#      именно они и есть стыки (запястье, щиколотка, шея);
-#   2. шов подвинуть точно на плоскость, иначе крышка выходит волнистой;
-#   3. в обе детали посадить нишу и напечатать штифт отдельно.
+# A real joint is a flat cut across the limb, a blind socket in both halves,
+# and a pin printed as a separate body.
+#
+# Hence three things a plain colour cut does not have:
+#   1. seam loops must be measured, and the nearly flat ones named - those
+#      are the joints (a wrist, an ankle, a neck);
+#   2. the seam must be moved exactly onto its plane, or the cap comes out wavy;
+#   3. a socket goes into both parts and the pin is printed separately.
 
 
 def twin_lookup(F):
@@ -512,7 +507,7 @@ def inscribed(L, c, n, step=0.2):
     lo, hi = P.min(0) - step, P.max(0) + step
     w = np.maximum(((hi - lo) / step).astype(int) + 3, 4)
     img = np.zeros((w[1], w[0]), bool)
-    # заливка контура: чётность пересечений горизонтальным лучом
+    # contour fill: parity of crossings along a horizontal ray
     ys = lo[1] + (np.arange(w[1]) + 0.5) * step
     xs = lo[0] + (np.arange(w[0]) + 0.5) * step
     A, B = P, np.roll(P, -1, axis=0)
@@ -800,16 +795,16 @@ def plane_cut_seam(V, F, lab, ea, eb, s, sa, la, lb, margin):
     R = s['rad'] + margin
     c0 = V[s['loop']].mean(0)
 
-    sv = (V - c) @ n                       # сторона каждой ВЕРШИНЫ
+    sv = (V - c) @ n                       # side of each VERTEX
     sv = np.where(np.abs(sv) < 1e-9, 1e-9, sv)
     fs = sv[F]
     C = V[F].mean(1)
     cand = ((np.abs(fs).max(1) < h) &
             (np.linalg.norm(C - c0, axis=1) < R) &
             np.isin(lab, [la, lb]))
-    # Затравка обхода — грани самой петли. Берутся по её ВЕРШИНАМ, а не по
-    # номерам граней: после первого же реза нумерация граней меняется,
-    # а вершины только дописываются в конец.
+    # The traversal seed is the loop's own faces. They are taken by its
+    # VERTICES, not by face indices: after the first cut the face numbering
+    # changes, while vertices are only appended at the end.
     isv = np.zeros(len(V), bool)
     isv[np.asarray(s['loop'], np.int64)] = True
     cur = isv[F].any(1) & cand
@@ -825,7 +820,7 @@ def plane_cut_seam(V, F, lab, ea, eb, s, sa, la, lb, margin):
 
     up, dn = (la, lb) if sa > 0 else (lb, la)
 
-    # 1. рёбра, которые режет плоскость у граней полосы
+    # 1. edges cut by the plane on the faces of the strip
     mid, Vx, nv = {}, [V], len(V)
     def edge_point(i, k):
         nonlocal nv
@@ -844,7 +839,7 @@ def plane_cut_seam(V, F, lab, ea, eb, s, sa, la, lb, margin):
             if (sv[a] > 0) != (sv[b] > 0):
                 edge_point(a, b)
 
-    # 2. все грани, которых коснулся рез, плюс вся полоса
+    # 2. every face the cut touched, plus the whole strip
     touched = np.zeros(len(V), bool)
     for (a, b) in mid:
         touched[a] = touched[b] = True
@@ -862,7 +857,7 @@ def plane_cut_seam(V, F, lab, ea, eb, s, sa, la, lb, margin):
         k = sum(x is not None for x in cutedge)
         if k == 0:
             if not inband:
-                continue                       # грань не трогаем вовсе
+                continue                       # leave the face alone entirely
             drop[f] = True
             newF.append(tri)
             newL.append(up if fs[f][0] > 0 else dn)
@@ -884,7 +879,7 @@ def plane_cut_seam(V, F, lab, ea, eb, s, sa, la, lb, margin):
             loth = (dn if sv[a] > 0 else up) if inband else lab[f]
             newF += [[a, pab, pca], [pab, b, cc_], [pab, cc_, pca]]
             newL += [lone, loth, loth]
-        else:                                   # k == 1: простое деление ребра
+        else:                                   # k == 1: a simple edge split
             i = [x for x in range(3) if cutedge[x] is not None][0]
             a = int(tri[i]); b = int(tri[(i + 1) % 3]); cc_ = int(tri[(i + 2) % 3])
             pab = cutedge[i]
@@ -957,9 +952,9 @@ def report_inlay(V, F, lab, cc, clab, area, nrm, fcol, depth, minw, wall,
         per = sum(plen)
         wid = 2 * A / per if per else 0.0
         why = ''
-        # Островок чужого цвета внутри пятна — не повод отказать: он станет
-        # дыркой и в пробке, и в кармане, а сам сядет в свой карман. Пробку
-        # задаёт самая длинная петля, внутренние остаются как есть.
+        # An island of a foreign colour inside a patch is no reason to refuse:
+        # it becomes a hole in both the plug and the pocket and seats in its own
+        # pocket. The plug is defined by the longest loop; inner ones stay.
         if not loops:
             why = 'нет границы'
         elif d is None or back > 0.01:
@@ -1004,14 +999,14 @@ def report_joints(V, F, lab, cc, clab, area, fcol, flat, wall, args):
             c0 = V[s['loop']].mean(0)
             near = np.linalg.norm(C - c0, axis=1) < 2 * s['dia']
 
-            # Знак нормали, посчитанной по петле, произволен, а ниша сверлится
-            # от шва вглубь конкретной детали: без разбора сторон ниши уезжают
-            # мимо тела. Сторона берётся у самих кусков — с какой стороны
-            # плоскости лежит кусок рядом с петлёй.
+            # The sign of a normal computed from the loop is arbitrary, while a
+            # socket is drilled from the seam into one specific part: without
+            # sorting out the sides, sockets go past the body. The side is taken
+            # from the pieces themselves, next to the loop.
             sa = float(side[near & (cc == s['patch'])].mean() or 0.0)
-            # Сосед по шву — не самый длинный из граничащих, а тот, кто лежит
-            # по другую сторону плоскости. На плече у белой рубашки самая
-            # длинная граница с красным жилетом, но жилет там же, где рубашка.
+            # The neighbour across a seam is not the one with the longest shared
+            # border but the one on the other side of the plane. The longest
+            # border often belongs to a piece on the same side.
             cand = [(l, j) for j, l in s['nblen'].items()
                     if j != s['patch'] and near[cc == j].any()
                     and np.sign(side[near & (cc == j)].mean()) != np.sign(sa)]
@@ -1026,16 +1021,16 @@ def report_joints(V, F, lab, cc, clab, area, fcol, flat, wall, args):
                 if got:
                     rr, d1, d2 = got
                     dow = f'Ø{2 * rr:.1f}×{d1 + d2 - 1:.1f}'
-                    # Кандидатов на вторую половину может быть несколько:
-                    # у шва бывает три соседа, и какой из них реально стоит
-                    # по ту сторону — здесь видно только приблизительно.
-                    # Перебор доводится до конца в pivot_joint.py, где
-                    # булево скажет точно.
+                    # There may be several candidates for the second half: a seam
+                    # can have three neighbours, and which of them truly lies on
+                    # the far side is only approximate here. The search is
+                    # finished in pivot_joint.py, where the boolean is exact.
+
                     alts = ([int(clab[s['patch']])] +
                             [int(clab[j]) for _, j in sorted(cand, reverse=True)])
                     fa = int(clab[own[0]])
                     rest = []
-                    for x in alts:                     # без повторов и без A
+                    for x in alts:                     # no repeats, and not A
                         if x != fa and x not in rest:
                             rest.append(x)
                     if not rest:
@@ -1140,8 +1135,8 @@ def main():
         lab = absorb(lab, ea, eb, elen, area, lambda l, cc, A, cl: cl == SPLIT)
         print(f'дроблёных граней {k} — отданы соседям')
 
-    # Скорлупа целиком одного цвета — подарок: её не надо резать вовсе,
-    # она уже отдельная деталь без единого шва.
+    # A shell entirely of one colour is a gift: it needs no cutting at all,
+    # it is already a separate part with no seam.
     def free_bodies(lab):
         SA = np.bincount(sc, weights=area, minlength=ns)
         out = []
@@ -1170,10 +1165,10 @@ def main():
         S0 = seam_loops(V, F, lab, cc, clab, area, twin_lookup(F))
         S0.sort(key=lambda x: -x['per'])
         if a.plane_cut == 'auto':
-            # Плоскость меняет авторский рисунок, поэтому переводятся на неё
-            # только те швы, ради которых это и делается, — где встанет
-            # штифт. Остальные плоские швы (край воротника, кончик сигары)
-            # ничего от плоскости не выигрывают, а цвет сдвигают.
+            # A plane changes the author's drawing, so only the seams it is
+            # being done for are moved onto one - the ones that will carry a
+            # pin. Other flat seams gain nothing from a plane and would shift
+            # the colour for free.
             which = [j['seam'] for j in
                      report_joints(V, F, lab, cc, clab, area, fcol,
                                    a.flat, a.wall, a)[1]]
@@ -1184,10 +1179,10 @@ def main():
         V, F, lab, ea, eb, elen, area = flatten_seams(
             V, F, lab, ea, eb, elen, area, cc, clab, S0, which, a.flat,
             a.plane_margin)
-        # Плоскость отрезает от соседних зон тонкие лоскуты — там, где
-        # рисунок подходил к шву под малым углом. Напечатать такой лоскут
-        # нельзя (он уже линии сопла), поэтому он отдаётся соседу тем же
-        # приёмом, что и крап.
+        # The plane shears thin slivers off neighbouring zones, where the
+        # drawing approached the seam at a shallow angle. Such a sliver is
+        # narrower than the nozzle line and cannot be printed, so it goes to
+        # its neighbour the same way speckle does.
         thr = max(a.min_area, 1.0)
         lab = coarsen(lab, ea, eb, elen, area, thr)
         nc, cc = patches(lab, ea, eb, len(F))
@@ -1281,23 +1276,23 @@ def main():
         open_e, nonman, vol = check(Vp, Fp)
         path = os.path.join(a.out, f'{nm}.stl')
         write_stl(path, Vp, Fp)
-        if a.preview:                       # npz под tools/paintview.py
+        if a.preview:                       # npz for tools/paintview.py
             np.savez_compressed(path[:-4] + '.npz', V=Vp, F=Fp,
                                 lab=np.full(len(Fp), f, np.int8), fcol=np.array(fcol, object))
         ok = 'замкнута' if open_e == 0 and nonman == 0 else \
              f'дыр {open_e}, склеек по ребру {nonman}'
         bad = int((~inside(V, F, cen)).sum()) if len(cen) else 0
         total += vol
-        # Толщина решает, возможен ли на этой детали стык с нишей: ниша
-        # живёт в теле, а у цвета, размазанного пятном по поверхности,
-        # тела нет — деталь выходит коркой в полтора миллиметра.
+        # Thickness decides whether a socketed joint is possible on this part:
+        # a socket lives inside a body, and a colour smeared as a patch over the
+        # surface has none - the part comes out as a thin crust.
         print(f'{nm}: {ar:.0f} мм2, граней {len(Fp)}, петель {len(cen)}, крышки {caps}, '
               f'объём {vol/1000:.2f} см3, средняя толщина {2*vol/ar:.1f} мм, '
               f'{ok}, центр петли снаружи: {bad} → {path}')
 
-    # Детали обязаны сложиться обратно в исходное тело: крышки соседей строятся
-    # по общей петле, поэтому стыкуются грань в грань. Расхождение объёмов —
-    # это либо дыра между деталями, либо взаимное наложение крышек.
+    # The parts must sum back to the original body: neighbouring caps are built
+    # from a shared loop and therefore meet face to face. A volume discrepancy
+    # is either a void between parts or caps overlapping each other.
     if not only:
         print(f'\nсумма деталей {total/1000:.2f} см3 против исходных {whole/1000:.2f} см3, '
               f'расхождение {100*abs(total-whole)/abs(whole):.2f} %')

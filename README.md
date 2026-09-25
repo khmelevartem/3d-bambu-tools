@@ -11,6 +11,9 @@ both the `paint_color` triangle format and `project_settings.config`. It is not
 a general 3D modelling toolkit: 28 of the 30 scripts touch the 3MF container or
 the slicer's presets.
 
+It also ships the **skills** that say how to use the tools, so an AI agent can
+drive them: see [AGENTS.md](AGENTS.md) and `skills/`.
+
 ## Why these exist
 
 Bambu Studio paints a model by subdividing triangles and packing a filament
@@ -48,9 +51,17 @@ So clone it into a project, not next to one:
 
 ```bash
 git clone https://github.com/khmelevartem/bambu-3mf-tools.git my-print-project/tools
-cp my-print-project/tools/hardware.example.json my-print-project/hardware.json
-$EDITOR my-print-project/hardware.json
-python3 my-print-project/tools/hardware.py     # prints what it resolved
+cd my-print-project
+cp tools/hardware.example.json hardware.json
+$EDITOR hardware.json
+python3 tools/hardware.py     # prints what it resolved
+```
+
+To let an agent use the skills, link them into `.claude/skills/`:
+
+```bash
+mkdir -p .claude/skills
+for s in tools/skills/*/; do ln -s "../../$s" ".claude/skills/$(basename $s)"; done
 ```
 
 `hardware.json` is the single source for nozzle diameter, layer height, line
@@ -145,10 +156,9 @@ Orca.
 
 ## Caveats
 
-- **In-code documentation is in Russian.** The scripts carry long docstrings
-  recording what was measured, on which model, and which approach was tried and
-  rejected. That is the most valuable part of this repository and it has not
-  been translated.
+- **Terminal output is in Russian.** The tools were written for a
+  Russian-speaking owner and they talk back in Russian; the documentation,
+  docstrings and skills are in English.
 - Numbers and tolerances were measured on one A1 with a textured PEI plate and
   Bambu PLA. Treat them as starting points.
 - Bambu Studio's GLB importer merges all meshes into one object, so parts must

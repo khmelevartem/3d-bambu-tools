@@ -1,20 +1,21 @@
 #!/usr/bin/env python3
-"""Ремонт сетки через Blender в фоне. Запускается обычным python3 — сам себя
-перезапускает внутри Blender, руками ничего включать не надо.
+"""Mesh repair through Blender, headless. Started with an ordinary python3 -
+it relaunches itself inside Blender, and nothing has to be enabled by hand.
 
-    python3 tools/meshfix.py сломанная.stl                 # безопасный набор
-    python3 tools/meshfix.py вход.stl -o чинёная.stl --holes --normals
-    python3 tools/meshfix.py вход.3mf --extract            # достать сетку из 3MF
-    python3 tools/meshfix.py вход.stl --dry                # только показать, что сделал бы
+    python3 tools/meshfix.py broken.stl                 # the safe set
+    python3 tools/meshfix.py in.stl -o fixed.stl --holes --normals
+    python3 tools/meshfix.py in.3mf --extract           # pull the mesh out of a 3MF
+    python3 tools/meshfix.py in.stl --dry               # only report what it would do
 
-Blender зовётся с --factory-startup: он не читает пользовательские настройки
-и не пишет их обратно, поэтому запускать можно при открытом Blender — аддоны
-и userpref не пострадают. По той же причине аддон 3D Print Toolbox тут
-недоступен и не нужен: всё делается штатным bmesh, он встроен.
+Blender is called with --factory-startup: it neither reads user preferences nor
+writes them back, so **this may be run while Blender is open** - addons and
+userpref are safe. For the same reason the 3D Print Toolbox addon is
+unavailable here, and it is not needed: everything is done with the built-in
+bmesh.
 
-Шаги выключены по умолчанию поодиночке; без флагов выполняется безопасный
-набор: вырожденные грани, дубли граней, потерянные вершины, пересчёт нормалей.
-Дырки и сварка вершин меняют геометрию, поэтому просятся явно.
+Without flags the safe set runs: degenerate faces, duplicate faces, loose
+vertices, recomputed normals. **Hole filling and vertex welding change the
+geometry and must be asked for explicitly.**
 """
 import sys, os, subprocess, json
 
@@ -36,7 +37,7 @@ STEPS = {
 }
 
 
-# ======================= часть, работающая внутри Blender =======================
+# ======================= the part that runs inside Blender ======================
 
 def run_in_blender(argv):
     import bpy, bmesh
@@ -56,14 +57,14 @@ def run_in_blender(argv):
     objs = [o for o in bpy.context.scene.objects if o.type == 'MESH']
     if not objs:
         raise SystemExit("в файле нет сеток")
-    # всё в один объект: ремонт идёт по цельной сетке
+    # everything into one object: repair works on a single mesh
     ctx = bpy.context.copy()
     for o in objs: o.select_set(True)
     bpy.context.view_layer.objects.active = objs[0]
     if len(objs) > 1:
         bpy.ops.object.join()
     obj = bpy.context.view_layer.objects.active
-    # применить трансформации: иначе экспорт уедет в масштабе
+    # apply transforms, or the export goes out at the wrong scale
     bpy.ops.object.transform_apply(location=False, rotation=True, scale=True)
 
     def survey(bm):
@@ -89,7 +90,7 @@ def run_in_blender(argv):
     if args["degenerate"]:
         n0 = len(bm.faces)
         bmesh.ops.dissolve_degenerate(bm, dist=1e-9, edges=bm.edges[:])
-        # dissolve_degenerate не берёт грани нулевой площади с разными вершинами
+        # dissolve_degenerate skips zero-area faces with distinct vertices
         zero = [f for f in bm.faces if f.calc_area() <= 1e-12]
         if zero:
             bmesh.ops.delete(bm, geom=zero, context='FACES')
@@ -129,10 +130,10 @@ def run_in_blender(argv):
         log.append("нормали пересчитаны наружу")
 
     if args["remesh"]:
-        # Воксельная пересборка: поверхность строится заново по объёму, и
-        # результат замкнут и манифолден по построению. Ею лечатся Т-образные
-        # швы, самопересечения и слипшиеся куски — всё, что поточечный ремонт
-        # не берёт. Плата — потеря деталей мельче вокселя и другая топология.
+        # Voxel rebuild: the surface is rebuilt from the volume, so the result
+        # is closed and manifold by construction. It cures T-shaped seams,
+        # self-intersections and fused pieces - everything pointwise repair
+        # cannot touch. The price is details finer than the voxel, and new topology.
         bm.to_mesh(obj.data); obj.data.update(); bm.free()
         obj.data.remesh_voxel_size = args["remesh"]
         obj.data.remesh_voxel_adaptivity = 0.0
@@ -143,9 +144,9 @@ def run_in_blender(argv):
                    f"граней стало {len(bm.faces)}")
 
     if args["dropjunk"]:
-        # Мусорные островки: после воксельной пересборки и булевых операций
-        # остаются отдельные тела в несколько граней и нулевого объёма.
-        # В слайсере они дают крошки рядом с деталью.
+        # Junk islands: voxel rebuilds and boolean operations leave separate
+        # bodies of a few faces and zero volume. In the slicer they show up
+        # as crumbs next to the part.
         import itertools
         seen, groups = set(), []
         for f in bm.faces:
@@ -172,10 +173,10 @@ def run_in_blender(argv):
             log.append("тело одно, выбрасывать нечего")
 
     if args["smooth"]:
-        # Воксельная пересборка оставляет ступеньку в половину вокселя: на 0.15 мм
-        # это 0.05-0.08 мм ряби, в печати её нет, а в слайсере поверхность выглядит
-        # мохнатой. Лапласово сглаживание снимает рябь; следить надо за усадкой —
-        # оно тянет выпуклости внутрь, поэтому проходов нужно мало.
+        # A voxel rebuild leaves a step of half a voxel, a ripple that does not
+        # exist in print while the surface looks furry in the slicer. Laplacian
+        # smoothing removes it; watch for shrinkage, since it pulls convexities
+        # inwards, so few passes are needed.
         for _ in range(args["smooth"]):
             bmesh.ops.smooth_vert(bm, verts=bm.verts[:], factor=0.5,
                                   use_axis_x=True, use_axis_y=True, use_axis_z=True)
@@ -187,7 +188,7 @@ def run_in_blender(argv):
 
     if not args["dry"]:
         bm.to_mesh(obj.data); obj.data.update()
-        # validate() ловит то, что bmesh пропускает: битые индексы, дубли петель
+        # validate() catches what bmesh misses: broken indices, duplicate loops
         args_changed = obj.data.validate(verbose=False)
         log.append(f"mesh.validate(): {'нашёл и поправил битую геометрию' if args_changed else 'претензий нет'}")
         e2 = os.path.splitext(dst)[1].lower()
@@ -201,7 +202,7 @@ def run_in_blender(argv):
                                       "nonmanifold_points": nm_pts}, ensure_ascii=False))
 
 
-# ============================ обычный запуск ============================
+# ============================ ordinary invocation ============================
 
 def main():
     argv = sys.argv[1:]
@@ -267,9 +268,9 @@ def main():
     print(f"  стало: {a['faces']} граней, {a['verts']} вершин, открытых рёбер {a['open']}, "
           f"non-manifold {a['nonmanifold']}, объём {a['volume']:.1f} мм³, габарит {a['bbox']}")
 
-    # Габарит: тревожить только на величину, видную в печати. Слой 0.2 мм,
-    # сопло 0.4 — сдвиг в 17 микрон после воксельной пересборки не значит ничего,
-    # а вот пойманный масштаб 1:1000 (метры вместо миллиметров) значит всё.
+    # Bounding box: only raise an alarm at a magnitude visible in print. A shift
+    # of tens of microns after a voxel rebuild means nothing, while a caught
+    # 1:1000 scale (metres instead of millimetres) means everything.
     drift = max(abs(x - y) for x, y in zip(b["bbox"], a["bbox"]))
     if drift > 0.05:
         print(f"  !! ГАБАРИТ УЕХАЛ на {drift:.3f} мм: {b['bbox']} -> {a['bbox']} — проверить масштаб перед печатью")

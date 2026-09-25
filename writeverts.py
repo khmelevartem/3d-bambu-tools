@@ -1,29 +1,29 @@
-"""Записать изменённые координаты вершин обратно в 3MF, сохранив покраску.
+"""Write changed vertex coordinates back into a 3MF, keeping the paint.
 
-Единственный способ поправить геометрию чужого проекта, не потеряв цвет:
-`paint_color` привязан к НОМЕРУ треугольника, поэтому двигать вершины можно,
-а менять их число и порядок — нельзя. Ремонт сеткой (`meshfix.py --put`)
-нумерацию ломает и требует переноса покраски; здесь она остаётся на месте.
+The only way to fix the geometry of someone else's project without losing
+colour: `paint_color` is bound to the triangle's INDEX, so vertices may be
+moved, but their number and order may not. Mesh repair (`meshfix.py --put`)
+breaks the numbering and needs a paint transfer; here the paint stays put.
 
-    uv run --with numpy python3 tools/writeverts.py исходный.3mf правка.npz новый.3mf
+    uv run --with numpy python3 tools/writeverts.py source.3mf edit.npz new.3mf
 
-В npz три массива:
-    V      (N,3) float — новые координаты ВСЕХ вершин, в порядке файла
-    moved  (N,)  bool  — какие из них переписывать
-    entry  str         — путь внутри архива, обычно 3D/3dmodel.model
-                         или 3D/Objects/object_1.model
+Three arrays in the npz:
+    V      (N,3) float — new coordinates of ALL vertices, in file order
+    moved  (N,)  bool  — which of them to overwrite
+    entry  str         — path inside the archive, usually 3D/3dmodel.model
+                         or 3D/Objects/object_1.model
 
-Строки нетронутых вершин переносятся дословно, порядок записей и способ сжатия
-в архиве сохраняются — диф остаётся только там, где геометрия правда поменялась.
+Lines of untouched vertices are carried over verbatim; the order of archive
+entries and the compression method are kept, so the diff stays where geometry moved.
 
-Проверено 19.09.2026 на `тройная развилка жд.3mf` (4926 вершин, 9852 грани):
-с moved=False XML выходит байт в байт исходным; с moved=True на всех вершинах
-координаты совпадают точно (0 мм), сдвиг на 1 мм воспроизводится с точностью
-2.8e-14 мм; порядок граней и состав архива не меняются ни в одном случае.
+Verified 2026-09-19 on a triple rail junction (4926 vertices, 9852 faces):
+with moved=False the XML comes out byte-identical to the source; with
+moved=True on every vertex the coordinates match exactly (0 mm), and a 1 mm
+shift reproduces to 2.8e-14 mm; face order and archive contents never change.
 
-Разбор `<vertex .../>` идёт регуляркой по тому формату, каким пишет Bambu
-Studio. Если вершин найдено не столько, сколько в npz, скрипт падает на
-assert — молча покалеченного файла не будет.
+`<vertex .../>` is parsed by regex against the format Bambu Studio writes.
+If the number of vertices found does not match the npz, the script dies on
+an assert — there will be no silently mangled file.
 """
 import re, shutil, sys, zipfile
 import numpy as np

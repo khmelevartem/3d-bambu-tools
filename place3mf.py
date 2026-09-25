@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
-"""Поставить объект 3MF на середину стола и опустить на пластину.
+"""Put a 3MF object at the centre of the bed and drop it onto the plate.
 
-Зачем: у проекта, прошедшего через сторонний экспорт, сдвиг в
-`<build><item transform=...>` сбрасывается, объект уезжает в угол стола, и
-`--slice` отвечает «Nothing to be sliced, either the print is empty or no
-object is fully inside the print volume». Это вопрос размещения, а не сетки:
-`meshdoctor` и `--info` на таком файле чистые.
+Why: in a project that went through a third-party export the offset in
+`<build><item transform=...>` is reset, the object ends up off the bed, and
+`--slice` answers "Nothing to be sliced, either the print is empty or no
+object is fully inside the print volume". A placement problem, not a mesh
+one: `meshdoctor` and `--info` are clean on such a file.
 
-Меняются только три последних числа матрицы (сдвиг) — в `3D/3dmodel.model`
-и в `Metadata/model_settings.config`. Поворот и масштаб не трогаются.
+Only the last three numbers of the matrix (the offset) change — in
+`3D/3dmodel.model` and `Metadata/model_settings.config`. Rotation and scale stay.
 
-    python3 tools/place3mf.py вход.3mf выход.3mf --bed 256 256
+    python3 tools/place3mf.py in.3mf out.3mf --bed 256 256
 """
 import argparse, re, zipfile
 import numpy as np
@@ -32,7 +32,7 @@ M = np.array(T[:9]).reshape(3, 3)
 mesh = next(k for k in data if k.endswith('.model') and b'<vertex' in data[k][:200000])
 V = np.array(re.findall(r'<vertex x="([^"]*)" y="([^"]*)" z="([^"]*)"\s*/>',
                         data[mesh].decode('utf-8')), dtype=np.float64)
-V = V[np.isfinite(V).all(1)]        # у экспорта попадаются inf/nan в вершинах
+V = V[np.isfinite(V).all(1)]        # exports sometimes leave inf/nan in vertices
 W = V @ M
 lo, hi = W.min(0), W.max(0)
 new = [a.bed[0]/2 - (lo[0]+hi[0])/2, a.bed[1]/2 - (lo[1]+hi[1])/2, -lo[2]]

@@ -1,24 +1,27 @@
 #!/usr/bin/env python3
-"""Правка покраски по филаментам внутри готового 3MF. Геометрия не меняется.
+"""Edit per-filament paint inside a finished 3MF. The geometry never changes.
 
-Покраска живёт в атрибуте paint_color на <triangle>. Скрипт читает её, выравнивает
-границы цвета графорезом и пишет обратно, не трогая ни вершины, ни индексы граней.
+Paint lives in the paint_color attribute on <triangle>. This reads it,
+straightens the colour borders with a graph cut and writes it back, touching
+neither vertices nor face indices.
 
-    uv run --with numpy --with scipy --with PyMaxflow python tools/paint.py \\
-        parse  модель.3mf work/p.npz
-    uv run … python tools/paint.py stats  work/p.npz
-    uv run … python tools/paint.py smooth work/p.npz work/p2.npz --band 4 --lam 1.0
-    uv run … python tools/paint.py write  модель.3mf work/p2.npz готово.3mf
-    uv run … python tools/paint.py filament модель.3mf с_пятым.3mf '#C12E1F'
+    uv run --with numpy --with scipy --with PyMaxflow python tools/paint.py \
+        parse  model.3mf work/p.npz
+    uv run ... python tools/paint.py stats  work/p.npz
+    uv run ... python tools/paint.py smooth work/p.npz work/p2.npz --band 4 --lam 1.0
+    uv run ... python tools/paint.py write  model.3mf work/p2.npz ready.3mf
+    uv run ... python tools/paint.py filament model.3mf with_fifth.3mf '#C12E1F'
+    uv run ... python tools/paint.py explode model.3mf work/e.npz --object Cube
 
-Коды покраски и ловушки формата — references/paint-format.md скилла 3mf-paint.
+The paint codes and the traps of the format are in references/paint-format.md
+of the 3mf-paint skill.
 """
 import argparse, json, os, re, sys, zipfile
 import numpy as np
 
 CODE2FIL = {'': 1, '4': 1, '8': 2, '0C': 3, '1C': 4, '2C': 5, '3C': 6, '4C': 7}
 FIL2CODE = {v: k for k, v in CODE2FIL.items() if k}
-SPLIT = -1                      # треугольник покрашен кистью в несколько цветов
+SPLIT = -1                      # triangle painted with the brush in several colours
 TRI = re.compile(r'<triangle v1="(\d+)" v2="(\d+)" v3="(\d+)"'
                  r'(?:\s+paint_color="([0-9A-Fa-f]+)")?\s*/>')
 VERT = re.compile(r'<vertex x="([^"]*)" y="([^"]*)" z="([^"]*)"\s*/>')
@@ -34,7 +37,7 @@ def model_entry(z):
     raise SystemExit(f'не нашёл сетку среди {cands}')
 
 
-# ------------------------------------------------ объекты проекта
+# ------------------------------------------------ project objects
 def objects(z):
     """Объекты проекта: (имя, филамент объекта, запись с сеткой).
 
@@ -50,8 +53,8 @@ def objects(z):
     try:
         cfg = z.read('Metadata/model_settings.config').decode('utf-8')
         for blk in re.findall(r'<object id="(\d+)">(.*?)</object>', cfg, re.S):
-            # метаданные самого объекта идут до первой <part>; у объекта из
-            # нескольких частей иначе побеждает имя последней части
+            # the object's own metadata comes before the first <part>; otherwise
+            # on a multi-part object the last part's name wins
             head = blk[1].split('<part')[0]
             kv = dict(re.findall(r'<metadata key="(\w+)" value="([^"]*)"/>', head))
             meta[blk[0]] = (kv.get('name', ''), int(kv.get('extruder', 1)))
@@ -83,7 +86,7 @@ def pick_object(z, want):
     return hit[0]
 
 
-# ------------------------------------------------ кисть: дроблёные грани
+# ------------------------------------------------ brush: split faces
 def paint_bits(code):
     """Код paint_color -> поток бит.
 
@@ -136,15 +139,15 @@ def paint_tree(code):
             return
         i = take(2)
         j, k = (i + 1) % 3, (i + 2) % 3
-        mid = [(p[t] + p[(t + 1) % 3]) / 2 for t in range(3)]   # mid[t] на стороне t..t+1
-        if sides == 1:                       # делится сторона i
+        mid = [(p[t] + p[(t + 1) % 3]) / 2 for t in range(3)]   # mid[t] on side t..t+1
+        if sides == 1:                       # side i is split
             ch = [[p[i], mid[i], p[k]], [mid[i], p[j], p[k]]]
-        elif sides == 2:                     # делятся стороны i и k, сходящиеся в p[i]
+        elif sides == 2:                     # sides i and k, meeting at p[i]
             ch = [[p[i], mid[i], mid[k]], [mid[i], p[j], mid[k]], [p[j], p[k], mid[k]]]
-        else:                                # делятся все три
+        else:                                # all three are split
             ch = [[p[i], mid[i], mid[k]], [mid[i], p[j], mid[j]],
                   [mid[j], p[k], mid[k]], [mid[i], mid[j], mid[k]]]
-        for c in reversed(ch):               # дети лежат в потоке задом наперёд
+        for c in reversed(ch):               # children lie in the stream back to front
             rec(np.array(c))
 
     rec(np.eye(3))
@@ -192,8 +195,8 @@ def cmd_explode(a):
     P = np.array(tri, dtype=np.float64)
     lab = np.array(lab, dtype=np.int8)
 
-    # сварка вершин: подтреугольник считается по своему родителю, и одна
-    # и та же точка с двух сторон общего ребра выходит с разницей ~1e-13
+    # vertex welding: a subtriangle is computed from its own parent, so one and
+    # the same point comes out differing by ~1e-13 across a shared edge
     q = np.round(P.reshape(-1, 3) / a.weld).astype(np.int64)
     _, first, inv = np.unique(q, axis=0, return_index=True, return_inverse=True)
     V = P.reshape(-1, 3)[first]
@@ -231,7 +234,7 @@ def cmd_parse(a):
     F = np.array([t1, t2, t3], dtype=np.int64).T
     lab = np.array(lab, dtype=np.int8)
 
-    # смежность граней по общему ребру + длины рёбер и площади
+    # face adjacency across shared edges, plus edge lengths and areas
     n = len(F)
     E = np.concatenate([F[:, [0, 1]], F[:, [1, 2]], F[:, [2, 0]]])
     E.sort(axis=1)
@@ -245,9 +248,9 @@ def cmd_parse(a):
     P = V[F]
     area = 0.5 * np.linalg.norm(np.cross(P[:, 1] - P[:, 0], P[:, 2] - P[:, 0]), axis=1)
 
-    # Настоящие цвета филаментов проекта — чтобы рендер показывал деталь такой,
-    # какой она выйдет из принтера. Без этого paintview красит по своей условной
-    # палитре, и на чужом проекте цвета оказываются переставлены.
+    # The project's real filament colours, so a render shows the part as it will
+    # leave the printer. Without them paintview uses its notional palette, and
+    # on a foreign project the colours come out permuted.
     try:
         fcol = np.array(json.loads(z.read('Metadata/project_settings.config'))
                         .get('filament_colour', []), dtype=object)
@@ -263,7 +266,7 @@ def cmd_parse(a):
         print(f'  {nm}: {int((lab==f).sum())} граней, {area[lab==f].sum():.1f} мм2')
 
 
-# ---------------------------------------------------------------- общее
+# ---------------------------------------------------------------- common
 class Mesh:
     def __init__(self, path):
         d = np.load(path, allow_pickle=True)
@@ -327,7 +330,7 @@ def cmd_stats(a):
     small = (ca > 0) & (ca < a.min_area)
     print(f'одноцветных кусков {int((ca>0).sum())}, '
           f'мельче {a.min_area} мм2: {int(small.sum())} (всего {ca[small].sum():.2f} мм2)')
-    # одиночные выбросы: у грани все три соседа целые, одного цвета и не её
+    # isolated outliers: all three neighbours intact, one colour, and not its own
     ptr, dst = m.csr()
     cnt = np.diff(ptr)
     idx = np.flatnonzero(cnt == 3)
@@ -345,11 +348,11 @@ def cmd_smooth(a):
     uni = orig > 0
     ea, eb, elen, area = m.ea, m.eb, m.elen, m.area
 
-    # Цена провести границу по ребру: длина ребра со скидкой за складку рельефа.
-    # Чем острее двугранный угол, тем дешевле — так граница липнет к рёбрам модели.
+    # Price of running the border along an edge: edge length, discounted by the
+    # crease - the sharper the dihedral angle, the cheaper, so the border sticks.
     cosd = np.clip((m.nrm[ea] * m.nrm[eb]).sum(1), -1, 1)
     w = elen * np.maximum(a.crease_floor, ((1 + cosd) / 2) ** a.crease_pow)
-    # Цена перекрасить грань. У дроблёных она нулевая, если их отпускаем.
+    # Price of repainting a face. Zero for split faces when they are released.
     Dw = a.lam * area * (uni if a.splits == 'free' else np.ones(m.n, bool))
 
     bnd = np.zeros(m.n, bool)
@@ -358,8 +361,8 @@ def cmd_smooth(a):
     dist = hop_distance(m, bnd, max(a.band, a.core))
     frozen = dist > a.band
     if a.core:
-        # Сердцевина одноцветного куска закрепляется: иначе укорочение границы
-        # съедает узкие детали — по периметру они дороже, чем по площади.
+        # The core of a single-colour patch is pinned: otherwise shortening the
+        # border eats narrow details, which cost more by perimeter than by area.
         frozen |= (dist >= a.core) & uni
     if a.splits == 'keep':
         frozen |= ~uni
@@ -388,7 +391,7 @@ def cmd_smooth(a):
                 fz = frozen[sel] & su
                 capA[fz & (orig[sel] != A)] = INF
                 capB[fz & (orig[sel] != B)] = INF
-                third = ~su & (lab[sel] != A) & (lab[sel] != B)   # уже отдан третьему цвету
+                third = ~su & (lab[sel] != A) & (lab[sel] != B)   # already given to a third colour
                 capA[third] = INF; capB[third] = INF
                 g.add_grid_tedges(nodes, capB, capA)
                 g.add_edges(idx[ea[ok]], idx[eb[ok]], w[ok], w[ok])
@@ -399,7 +402,7 @@ def cmd_smooth(a):
         print(f'  проход {rnd+1}: сдвинуто {changed:6d}, граница {m.boundary(lab):.1f} мм')
         if not changed: break
 
-    for _ in range(20):                       # поглотить оставшийся крап
+    for _ in range(20):                       # absorb the remaining speckle
         nc, comp = components(m, lab)
         ca = np.bincount(comp, weights=area)
         bad = np.flatnonzero((ca > 0) & (ca < a.min_area))
@@ -442,7 +445,7 @@ def cmd_write(a):
         new = int(lab[i])
         split = old not in CODE2FIL
         if split and not a.collapse_splits:
-            st['kept'] += 1; return mm.group(0)          # ручная кисть — дословно
+            st['kept'] += 1; return mm.group(0)          # hand brushwork - verbatim
         if not split and CODE2FIL[old] == new:
             st['same'] += 1; return mm.group(0)
         st['collapsed' if split else 'recol'] += 1
@@ -465,29 +468,29 @@ def cmd_write(a):
 
 
 # ---------------------------------------------------------------- filament
-# Настройки филамента лежат не одним значением на филамент: при N филаментах
-# встречаются списки длины N (одна запись), 2N (обычное сопло и высокопоточное)
-# и 4N. Расширять надо ВСЕ: оставишь хоть один старой длины — Bambu Studio уйдёт
-# за границу вектора. CLI при этом молчит и возвращает 0, а интерфейс отвечает
-# «An invalid configuration was found» и следом «does not contain any geometry data».
+# Filament settings are not one value per filament: with N filaments there are
+# lists of length N (one entry), 2N (normal and high-flow nozzle) and 4N.
+# ALL of them must be extended - leave one at the old length and Bambu Studio
+# reads past the end of a vector. The CLI stays silent and returns 0, while the
+# GUI reports an invalid configuration and then no geometry data.
 DENY_PREFIX = ('machine_max_', 'extruder_', 'printer_extruder')
 DENY = {'printable_area', 'bed_exclude_area', 'print_compatible_printers', 'nozzle_diameter',
         'thumbnails', 'bed_custom_texture', 'bed_custom_model', 'wipe_tower_x', 'wipe_tower_y',
-        'flush_volumes_matrix',                      # N x N, пересобирается отдельно
-        'filament_nozzle_map', 'filament_volume_map'}  # фиксированные 9 слотов
+        'flush_volumes_matrix',                      # N x N, rebuilt separately
+        'filament_nozzle_map', 'filament_volume_map'}  # fixed 9 slots
 
 
 def cmd_filament(a):
     zin = zipfile.ZipFile(a.src)
     cfg = json.loads(zin.read('Metadata/project_settings.config'))
     n = len(cfg['filament_colour'])
-    SRC = min(1, n - 1)                              # с какого филамента копировать
+    SRC = min(1, n - 1)                              # which filament to copy from
     grown = []
     for k, v in cfg.items():
         if not isinstance(v, list) or not v: continue
         if k in DENY or k.startswith(DENY_PREFIX) or len(v) % n: continue
         b = len(v) // n
-        if k == 'filament_self_index':               # хранит собственный номер
+        if k == 'filament_self_index':               # holds its own number
             v.extend([str(n + 1)] * b)
         else:
             v.extend(v[SRC * b:(SRC + 1) * b])
@@ -513,7 +516,7 @@ def cmd_filament(a):
     for key, add in (('filament_maps', '1'), ('filament_volume_maps', '0')):
         ms = re.sub(rf'(key="{key}" value=")([^"]*)(")',
                     lambda mm: mm.group(1) + mm.group(2) + ' ' + add + mm.group(3), ms)
-    js = json.dumps(cfg, indent=4, ensure_ascii=True).replace('\n', '\r\n')  # как Bambu Studio
+    js = json.dumps(cfg, indent=4, ensure_ascii=True).replace('\n', '\r\n')  # as Bambu Studio does
     repl = {'Metadata/project_settings.config': js.encode('utf-8'),
             'Metadata/model_settings.config': ms.encode('utf-8')}
     with zipfile.ZipFile(a.dst, 'w') as z:

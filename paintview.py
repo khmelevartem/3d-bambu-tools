@@ -1,26 +1,27 @@
 #!/usr/bin/env python3
-"""Посмотреть покраску и ткнуть в точку на модели.
+"""Render the paint, and point at a spot on the model.
 
-Bambu Studio показывает покраску только человеку у экрана. Этот рендерер рисует
-её сам: плоская заливка по филаментам с z-буфером, чтобы правку можно было
-увидеть, не поднимая интерфейс. Он же умеет обратное — сказать, какая грань
-и какие координаты под заданным пикселем.
+Bambu Studio shows the paint only to a human at the screen. This renderer draws
+it without the GUI: flat per-filament fill with a z-buffer, so an edit can be
+seen without launching the interface. It also does the reverse - reports which
+face and which coordinates lie under a given pixel.
 
-    uv run --with numpy python tools/paintview.py render work/p.npz вид.png \\
+    uv run --with numpy python tools/paintview.py render work/p.npz view.png \\
         --eye 0,-150,14 --target 0,-20,14 --fov 30 --size 1100x900
-    uv run --with numpy python tools/paintview.py pick work/p.npz \\
-        --eye 0,-150,14 --target 0,-20,14 --fov 30 --size 1100x900 --px 520,430
-    uv run --with numpy python tools/paintview.py grid work/p.npz … --box 300,700,5 --rows 280,520,6
+    uv run --with numpy python tools/paintview.py pick work/p.npz 540,320
+    uv run --with numpy python tools/paintview.py grid work/p.npz
 
-Цвета здесь условные и подобраны так, чтобы границы были видны: чёрный филамент
-рисуется тёмно-синим, иначе на нём не разобрать рельеф.
+Colours come from the project when `paint.py` saved them, otherwise from the
+notional palette below. Pure black is drawn as dark blue: on true black the
+relief is unreadable, and the relief is what the preview exists for. Split
+faces are drawn bright pink, so hand brushwork is visible at a glance.
 """
 import argparse, sys, struct, zlib
 import numpy as np
 
 PAL = {1: (0.19, 0.19, 0.23), 2: (1.00, 0.88, 0.76), 3: (0.97, 0.97, 0.97),
        4: (1.00, 0.78, 0.00), 5: (0.62, 0.11, 0.15), 6: (0.10, 0.55, 0.85),
-       7: (0.20, 0.65, 0.25), -1: (1.00, 0.00, 0.85)}      # -1 — дроблёные, ярко
+       7: (0.20, 0.65, 0.25), -1: (1.00, 0.00, 0.85)}      # -1 - split faces, bright
 NAME = {-1: 'дроб', 1: 'чёрн', 2: 'тело', 3: 'бел ', 4: 'зол ', 5: 'красн', 6: 'син', 7: 'зел'}
 
 
@@ -43,7 +44,7 @@ def palette(npz):
             rgb = tuple(int(h[k:k + 2], 16) / 255 for k in (0, 2, 4))
         except ValueError:
             rgb = (0.5, 0.5, 0.5)
-        if max(rgb) < 0.22:                      # чёрный -> тёмно-синий, как было
+        if max(rgb) < 0.22:                      # black -> dark blue, so relief reads
             rgb = (0.19, 0.19, 0.23)
         pal[i] = rgb
     return pal
@@ -71,7 +72,7 @@ def render(V, F, lab, eye, target, fov, W, H, bg=(0.88, 0.88, 0.90), pal=None):
     P = P[F]
     nrm = np.cross(P[:, 1] - P[:, 0], P[:, 2] - P[:, 0])
     ln = np.linalg.norm(nrm, axis=1); ln[ln == 0] = 1; nrm /= ln[:, None]
-    keep = ((-P[:, :, 2]) > 1e-3).all(1) & (nrm[:, 2] > 0)     # спереди и лицом к нам
+    keep = ((-P[:, :, 2]) > 1e-3).all(1) & (nrm[:, 2] > 0)     # in front and facing us
     P, nrm, lb = P[keep], nrm[keep], lab[keep]
     fpx = (W / 2) / np.tan(np.radians(fov) / 2)
     sx = P[:, :, 0] * fpx / (-P[:, :, 2]) + W / 2
@@ -86,8 +87,8 @@ def render(V, F, lab, eye, target, fov, W, H, bg=(0.88, 0.88, 0.90), pal=None):
     col = np.array([pal.get(int(l), (0.5, 0.5, 0.5)) for l in lb]) * sh[:, None]
 
     zbuf = np.full(W * H, np.inf); img = np.tile(np.array(bg), (W * H, 1))
-    # плотность выборки — по габариту на экране: тонкие треугольники не должны
-    # проваливаться между точками, иначе фон просвечивает и выглядит как крап
+    # sampling density follows the on-screen size: thin triangles must not fall
+    # between samples, or the background shows through and looks like speckle
     for lo, hi, k in [(0, 3, 6), (3, 8, 16), (8, 20, 40), (20, 60, 120),
                       (60, 200, 400), (200, 1e9, 1200)]:
         g = np.flatnonzero((ext >= lo) & (ext < hi))

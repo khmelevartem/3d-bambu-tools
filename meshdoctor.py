@@ -1,30 +1,34 @@
 #!/usr/bin/env python3
-"""Диагноз сетки: что именно сломано и чинится ли это автоматом.
+"""Diagnose a mesh: what exactly is broken, and whether it can be fixed
+automatically.
 
-Зачем отдельно от printcheck.py: тот склеивает вершины по round(c,4) и на
-импортированных сетках во float32 выдаёт ложные дыры (о чём написано в его
-собственной шапке). Здесь вершины склеиваются по допуску через сдвинутые
-сетки хеширования, и результат сверяется с точной склейкой: расхождение
-между ними — это и есть «шов рассыпался в числах», а не настоящая дыра.
+Why this exists next to printcheck.py: that one merges vertices by rounding
+coordinates and reports false holes on imported float32 meshes, as its own
+header says. Here vertices are merged with a tolerance, through shifted hash
+grids, and the result is compared against an exact merge. **A discrepancy
+between the two is a seam that fell apart in the numbers, not a real hole.**
 
-Дефекты разделяются по классам, потому что чинятся они по-разному:
+Defects are separated by class, because they are repaired differently:
 
-  открытое ребро (1 грань)   дырка          -> holes_fill закрывает
-  non-manifold ребро (>=3)   Т-образный шов -> нужен разрез/удаление, автомат опасен
-  несогласованный обход      вывернутая грань -> recalc_face_normals
-  вырожденная грань          нулевая площадь  -> удаление
-  дубль грани                              -> удаление
+  open edge (1 face)          a hole           -> hole filling closes it
+  non-manifold edge (>=3)     a T-shaped seam  -> needs a rebuild; automation is dangerous
+  inconsistent winding        a reversed face  -> recompute normals
+  degenerate face             zero area        -> collapse
+  duplicate face                               -> remove
 
-Форматы: STL (бинарный и ASCII), 3MF (проектный Bambu и голый core), OFF, OBJ.
-GLB/PLY -> сперва прогнать через Blender (см. meshfix.py --convert).
+Thresholds come from the installed nozzle, so the verdict answers whether a
+defect can reach the plastic at all.
+
+Formats: STL (binary and ASCII), 3MF (a Bambu project and bare core), OFF, OBJ.
+For GLB/PLY, convert through Blender first (see meshfix.py --convert).
 """
 import sys, os, struct, zipfile, re, math, json
 import xml.etree.ElementTree as ET
 import numpy as np
-import hardware                       # диаметр сопла — из hardware.json
+import hardware                       # nozzle diameter comes from hardware.json
 
 
-# ---------- чтение ----------
+# ---------- reading ----------
 
 def read_stl(path):
     buf = open(path, 'rb').read()
@@ -42,7 +46,7 @@ def read_stl(path):
     return [("stl", nums[:n * 3], np.arange(n * 3).reshape(n, 3), False)]
 
 
-SCALE_WARN = {}          # label -> строка про масштаб из <build>, см. _build_scales
+SCALE_WARN = {}          # label -> the <build> scale note, see _build_scales
 
 
 def _uniform_scale(t):
@@ -156,7 +160,7 @@ def read_off(path):
     F = []
     for i in range(nf):
         p = list(map(int, toks[start + nv + i].split()[:1 + int(toks[start + nv + i].split()[0])]))
-        for k in range(1, p[0] - 1):           # веер по n-угольнику
+        for k in range(1, p[0] - 1):           # fan over an n-gon
             F.append([p[1], p[1 + k], p[2 + k]])
     return [("off", V, np.array(F, dtype=np.int64), True)]
 
@@ -183,7 +187,7 @@ def read_any(path):
     raise ValueError(f"формат {ext} не читается напрямую: сперва meshfix.py --convert через Blender")
 
 
-# ---------- склейка вершин ----------
+# ---------- vertex merging ----------
 
 def weld(V, F, tol):
     """Слить вершины ближе tol. Восемь сдвинутых сеток: две точки в пределах
@@ -219,12 +223,12 @@ def weld(V, F, tol):
     return V[uniq], remap[F]
 
 
-# ---------- анализ ----------
+# ---------- analysis ----------
 
 def analyse(V, F, tol):
     r = {"faces_in": len(F), "verts_in": len(V)}
 
-    # вырожденные: совпали индексы либо нулевая площадь
+    # degenerate: repeated indices, or zero area
     a, b, c = V[F[:, 0]], V[F[:, 1]], V[F[:, 2]]
     cross = np.cross(b - a, c - a)
     area2 = np.linalg.norm(cross, axis=1)
@@ -232,13 +236,11 @@ def analyse(V, F, tol):
     degen = same_idx | (area2 <= 1e-14)
     r["degenerate"] = int(degen.sum())
 
-    # Вырожденную грань надо СХЛОПНУТЬ, а не выбросить. Выброс рвёт дыру:
-    # у соседних граней пропадает общее ребро. На дорожке жд удаление 12
-    # вырожденных граней открывало 12 рёбер, которых в файле нет, — ровно
-    # тот ложный диагноз, которым грешит printcheck.py. Blender при импорте
-    # и Bambu Studio при загрузке схлопывают, поэтому у них сетка замкнута
-    # (проверено 18.09.2026: Blender 84476 граней и 0 открытых рёбер,
-    # BambuStudio --info manifold = yes).
+    # A degenerate face must be COLLAPSED, not dropped. Dropping tears a hole:
+    # its neighbours lose a shared edge, which is exactly the false diagnosis
+    # printcheck.py is prone to. Blender on import and Bambu Studio on load
+    # both collapse, which is why their meshes come out closed.
+
     if degen.any():
         nv = len(V)
         parent_v = np.arange(nv)
@@ -258,7 +260,7 @@ def analyse(V, F, tol):
                     parent_v[rt] = a0
         roots = np.array([fv(i) for i in range(nv)])
         keep_v, remap = np.unique(roots, return_inverse=True)
-        V = V[keep_v]          # вершины переиндексовать вместе с гранями
+        V = V[keep_v]          # reindex vertices together with the faces
         F = remap[F]
         keep = ~((F[:, 0] == F[:, 1]) | (F[:, 1] == F[:, 2]) | (F[:, 0] == F[:, 2]))
         F = F[keep]
@@ -269,26 +271,26 @@ def analyse(V, F, tol):
         r["empty"] = True
         return r
 
-    # дубли граней (с точностью до вращения и направления)
+    # duplicate faces (up to rotation and direction)
     key = np.sort(F, axis=1)
     _, first, counts = np.unique(key, axis=0, return_index=True, return_counts=True)
     r["duplicate_faces"] = int((counts - 1).sum())
 
-    # рёбра
+    # edges
     E = np.vstack([F[:, [0, 1]], F[:, [1, 2]], F[:, [2, 0]]])
     Es = np.sort(E, axis=1)
     uniq_e, inv_e, cnt_e = np.unique(Es, axis=0, return_inverse=True, return_counts=True)
     r["edges"] = len(uniq_e)
-    r["open_edges"] = int((cnt_e == 1).sum())          # дырка
-    r["nonmanifold_edges"] = int((cnt_e >= 3).sum())   # Т-образный шов
+    r["open_edges"] = int((cnt_e == 1).sum())          # a hole
+    r["nonmanifold_edges"] = int((cnt_e >= 3).sum())   # a T-shaped seam
     nm_e = uniq_e[cnt_e >= 3]
     r["nm_edge_max"] = (round(float(np.linalg.norm(V[nm_e[:, 0]] - V[nm_e[:, 1]], axis=1).max()), 4)
                         if len(nm_e) else 0.0)
 
-    # Обход считать ТОЛЬКО по нормальным рёбрам с двумя гранями. Если мерить
-    # по всем, каждое non-manifold ребро попадает сюда же и число раздувается
-    # ровно вдвое против числа non-manifold — на переключателе жд было
-    # «non-manifold 3, обход 6», и вторая цифра ничего своего не сообщала.
+    # Count winding ONLY over normal two-face edges. Measured over all edges,
+    # every non-manifold edge lands here too and the number inflates to exactly
+    # twice the non-manifold count, telling nothing of its own.
+
     order_e = np.argsort(inv_e, kind='stable')
     inv_es = inv_e[order_e]
     starts_e = np.flatnonzero(np.r_[True, inv_es[1:] != inv_es[:-1]])
@@ -296,7 +298,7 @@ def analyse(V, F, tol):
     p0, p1 = order_e[starts_e[pair_mask]], order_e[starts_e[pair_mask] + 1]
     r["bad_winding_edges"] = int((E[p0] == E[p1]).all(axis=1).sum())
 
-    # оболочки: связность граней через рёбра
+    # shells: face connectivity through edges
     nf = len(F)
     parent = np.arange(nf)
 
@@ -309,11 +311,11 @@ def analyse(V, F, tol):
         return root
 
 
-    # Два счёта тел. Через все рёбра non-manifold шов склеивает касающиеся
-    # тела в одно; через нормальные — тела считаются раздельно. Расхождение
-    # и есть диагноз: «тройная развилка жд» — 1 тело через все рёбра и 40
-    # через нормальные, то есть 40 кусков, слепленных касанием по 39 рёбрам,
-    # а не объединённых булевой операцией.
+    # Two body counts. Through all edges, a non-manifold seam glues touching
+    # bodies into one; through normal edges they are counted separately.
+    # The discrepancy is the diagnosis: pieces stuck together by contact
+    # rather than united by a boolean.
+
     face_of = np.tile(np.arange(nf), 3)
     for only_pairs in (False, True):
         parent = np.arange(nf)
@@ -329,23 +331,23 @@ def analyse(V, F, tol):
         n = len(np.unique(lbl))
         r["bodies_touching" if not only_pairs else "bodies_separate"] = n
         if only_pairs and n > 1:
-            # Объём каждого тела отдельно: так видно мусорные островки,
-            # которые остаются после воксельной пересборки и после булевых
-            # операций. Печатать их не надо, а в габарит они входят.
+            # Per-body volume: this is what reveals the junk islands left
+            # behind by voxel rebuilds and boolean operations. They must not
+            # be printed, yet they do enter the bounding box.
             vol_f = np.einsum('ij,ij->i', a, cross) / 6.0
             uniq_l, inv_l = np.unique(lbl, return_inverse=True)
             vols = np.bincount(inv_l, weights=vol_f, minlength=len(uniq_l))
             cnts = np.bincount(inv_l, minlength=len(uniq_l))
             order_b = np.argsort(-np.abs(vols))
-            # Показываем дюжину крупнейших, а СЧИТАЕМ мусор по всем. Раньше
-            # счёт шёл по тому же срезу в 12 штук, и у Dutch с его 6811 телами
-            # отчёт говорил «мусорных 11» вместо 6810 (замечено 19.09.2026).
+            # Show a dozen of the largest, but COUNT junk over all of them.
+            # Counting over the displayed slice under-reports it by orders
+            # of magnitude on a mesh with thousands of bodies.
             biggest = abs(vols[order_b[0]])
             r["junk_bodies"] = int((np.abs(vols) < biggest * 1e-3).sum())
             r["body_volumes"] = [(int(cnts[i]), round(float(vols[i]), 3)) for i in order_b[:12]]
     r["shells"] = r["bodies_touching"]
 
-    # дырки как петли из открытых рёбер
+    # holes as loops of open edges
     bnd = uniq_e[cnt_e == 1]
     if len(bnd):
         vs = np.unique(bnd)
@@ -372,7 +374,7 @@ def analyse(V, F, tol):
         r["holes"] = 0
         r["hole_perimeters"] = []
 
-    # объём и габарит
+    # volume and bounding box
     vol = np.einsum('ij,ij->i', a, cross).sum() / 6.0
     r["volume"] = float(vol)
     r["area"] = float(area2.sum() / 2)
@@ -381,9 +383,9 @@ def analyse(V, F, tol):
     r["faces"] = len(F)
     r["verts"] = len(np.unique(F))
     r["euler"] = chi = r["verts"] - r["edges"] + r["faces"]
-    # Род считать от числа ТЕЛ: (2*тел - хи)/2. Формула (2-хи)/2 верна только
-    # для одного тела, а на нескольких даёт отрицательные значения. Нечётное
-    # хи означает, что поверхность не простая, и рода у неё нет.
+    # Compute genus from the number of SHELLS: (2*shells - chi)/2. The formula
+    # (2-chi)/2 holds for a single body only and returns negative values on
+    # several. An odd chi means the surface is not simple and has no genus.
     bodies = r["bodies_separate"]
     if r["open_edges"] or r["nonmanifold_edges"]:
         r["genus"] = "не определён: сетка не замкнута"
@@ -396,14 +398,14 @@ def analyse(V, F, tol):
     return r
 
 
-NOZZLE = hardware.nozzle()   # из hardware.json: всё мельче сопла в печати не существует
+NOZZLE = hardware.nozzle()   # from hardware.json: nothing finer than the nozzle exists in print
 
 
 def verdict(r):
-    # Мерить дефект соплом, а не считать штуки. Дырка периметром 0.16 мм на
-    # утке — это круг диаметром 0.05 мм: экструдер кладёт нитку 0.42 мм, такую
-    # дырку он просто заметает. Гнать на ремонт из-за неё значит рисковать
-    # покраской и топологией ради того, чего в пластике не будет.
+    # Measure a defect against the nozzle instead of counting items. A hole
+    # with a perimeter of a fraction of a millimetre is a circle the extruder
+    # simply sweeps over. Sending a model to repair because of it risks the
+    # paint and the topology for something that will not exist in plastic.
     tiny = r.get("hole_perimeters") and all(p < NOZZLE * math.pi for p in r["hole_perimeters"])
 
     if r.get("empty"):
@@ -415,7 +417,7 @@ def verdict(r):
     if r["watertight"] and r["consistent"] and r["volume"] > 0 and not r["duplicate_faces"]:
         extra = f" (вырожденных граней {r['degenerate']} — выбрасываются при нарезке)" if r["degenerate"] else ""
         return "ЧИСТО", "слайсер съест как есть" + extra
-    # Всё ли, что сломано, мельче сопла? Тогда это шум сетки, а не дефект детали.
+    # Is everything broken smaller than the nozzle? Then it is mesh noise.
     nm_tiny = r.get("nm_edge_max", 0) < NOZZLE
     junk_only = r.get("junk_bodies", 0) == max(0, r.get("bodies_separate", 1) - 1)
     if (tiny or not r["holes"]) and nm_tiny and junk_only and not r["degenerate"] and not r["duplicate_faces"]:
@@ -451,20 +453,20 @@ def report(path, tol_rel=1e-6, as_json=False, quiet_clean=False):
         tol = max(diag * tol_rel, 1e-9)
 
         if indexed:
-            # 3MF, OBJ, OFF: связность задана индексами автора — это и есть
-            # истина. Склеивать вершины тут нельзя: у «dutch on chair» в списке
-            # 14 вершин с одинаковыми координатами (шов развёртки), и склейка
-            # сшивала два листа поверхности в 7 несуществующих non-manifold
-            # рёбер. В файле их ноль, модель целая (проверено 18.09.2026).
+            # 3MF, OBJ, OFF: connectivity is the author's indices, and that is
+            # the truth. Merging vertices here is forbidden - identical
+            # coordinates on a UV seam get stitched into non-manifold edges
+            # that do not exist in the file at all.
+
             r = analyse(V, F, tol)
             r["seam_noise"] = 0
             uniq_v = np.unique(V, axis=0)
             r["split_vertices"] = len(V) - len(uniq_v)
         else:
-            # STL: индексов нет вообще, каждый треугольник со своими копиями
-            # вершин. Сперва склейка бит-в-бит; если она уже дала замкнутую
-            # сетку — по допуску склеивать незачем, это самый дорогой шаг
-            # (десяток секунд на 470 тыс. граней).
+            # STL: no indices at all, every triangle carries its own copies of
+            # the vertices. Merge bit-exactly first; if that already yields a
+            # closed mesh there is no reason to merge by tolerance, which is
+            # the most expensive step here.
             uniq_v, inv_v = np.unique(V, axis=0, return_inverse=True)
             r_exact = analyse(uniq_v, inv_v[F], tol)
             if r_exact.get("empty") or (r_exact["open_edges"] == 0
@@ -508,7 +510,7 @@ def report(path, tol_rel=1e-6, as_json=False, quiet_clean=False):
         if r.get("empty"):
             print("  !! пусто"); continue
         mark = lambda ok: "OK " if ok else "!! "
-        # мелочь, которую слайсер выбрасывает сам: не поднимать ложную тревогу
+        # small enough for the slicer to discard itself: raise no false alarm
         petty = "OK " if r["verdict"] == "ЧИСТО" else "!! "
         print(f"  {mark(r['open_edges']==0)}открытых рёбер (дырки): {r['open_edges']}"
               + (f" -> {r['holes']} петель, периметры {r['hole_perimeters'][:5]}" if r['holes'] else ""))

@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Расплющивает профиль Bambu Studio: резолвит цепочку `inherits` до конца.
+"""Flatten a Bambu Studio profile: resolve the `inherits` chain to the end.
 
-Bambu Studio CLI (--load-settings / --load-filaments) принимает только
-"плоский" JSON, а профили в Resources/profiles/BBL/ построены на наследовании.
+The Bambu Studio CLI (--load-settings / --load-filaments) accepts only
+"flat" JSON, while Resources/profiles/BBL/ profiles are built on inheritance.
 
-Использование:
+Usage:
     python3 resolve_profile.py "Bambu Lab A1 0.4 nozzle" out.json
     python3 resolve_profile.py "0.20mm Standard @BBL A1" out.json
     python3 resolve_profile.py "Bambu PLA Basic @BBL A1" out.json
@@ -15,12 +15,12 @@ from pathlib import Path
 
 ROOT = Path("/Applications/BambuStudio.app/Contents/Resources/profiles/BBL")
 SUBDIRS = ("machine", "process", "filament")
-# `from` и `type` обязательны для CLI — их не выбрасываем.
+# `from` and `type` are required by the CLI — do not drop them.
 SKIP = {"inherits", "instantiation", "setting_id", "name", "include"}
 
 
 def index() -> dict[str, Path]:
-    """name -> путь к json по всем подпапкам профилей."""
+    """name -> path to the json, searched across every profile subfolder."""
     out = {}
     for sub in SUBDIRS:
         for p in (ROOT / sub).rglob("*.json"):
@@ -34,7 +34,7 @@ def index() -> dict[str, Path]:
 
 
 def flatten(name: str, idx: dict[str, Path], seen=None) -> dict:
-    """Собирает ключи от корня цепочки к листу: потомок перекрывает предка."""
+    """Collect keys from the root of the chain to the leaf: child beats parent."""
     seen = seen or set()
     if name in seen:
         raise SystemExit(f"циклическое наследование на «{name}»")
@@ -44,17 +44,17 @@ def flatten(name: str, idx: dict[str, Path], seen=None) -> dict:
     data = json.loads(idx[name].read_text())
     parent = data.get("inherits")
     merged = flatten(parent, idx, seen) if parent else {}
-    # Ключ `include` — вторая, независимая от `inherits` ветка сборки профиля.
-    # У машин Bambu настоящий стартовый G-код (калибровка, прогрев, первая
-    # линия) лежит не в профиле принтера, а в файлах-шаблонах, перечисленных
-    # в `include`. Без них наследование доводит до fdm_machine_common
-    # с заглушкой «M109 S205» и печатью всей детали при 205 °C.
+    # The `include` key is a second assembly branch, independent of `inherits`.
+    # On Bambu machines the real start G-code (calibration, warm-up, the first
+    # line) lives not in the printer profile but in template files listed
+    # under `include`. Without them inheritance bottoms out at
+    # fdm_machine_common with a stub "M109 S205", printing the whole part at 205 C.
     for inc in data.get("include", []):
         merged.update({k: v for k, v in json.loads(idx[inc].read_text()).items()
                        if k not in SKIP})
     merged.update({k: v for k, v in data.items() if k not in SKIP})
     merged["name"] = name
-    merged["from"] = "system"   # без этого CLI падает: "from unsupported"
+    merged["from"] = "system"   # without this the CLI fails: "from unsupported"
     return merged
 
 

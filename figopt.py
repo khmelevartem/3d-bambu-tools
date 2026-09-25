@@ -1,17 +1,17 @@
 #!/usr/bin/env python3
-"""Оптимизация конкретного файла перед печатью: настройки, цвет, факт из G-кода.
+"""Optimise one file before printing: settings, colour, and the fact from G-code.
 
-figcheck.py отвечает «что с этой геометрией»: дно, свесы, ступеньки.
-Этот скрипт отвечает «что с этим ПРОЕКТОМ»: те ли настройки доехали, во что
-обойдётся многоцветность и что получилось на самом деле.
+figcheck.py answers what is wrong with the geometry - the bottom, overhangs,
+stair steps. This one answers what is wrong with the PROJECT: whether the right
+settings arrived, what multicolour will cost, and what actually came out.
 
-    python3 tools/figopt.py audit  проект.3mf              настройки против железа
-    python3 tools/figopt.py colors проект.3mf              смены цвета по слоям и их цена
-    python3 tools/figopt.py gcode  work/out/plate_1.gcode  факт после нарезки
-    python3 tools/figopt.py tilt   проект.3mf              меняет ли наклон число смен
+    python3 tools/figopt.py audit  project.3mf              settings against the machine
+    python3 tools/figopt.py colors project.3mf              colour changes by layer, and their price
+    python3 tools/figopt.py gcode  work/out/plate_1.gcode   the fact, after slicing
+    python3 tools/figopt.py tilt   project.3mf              does tilting change the change count
 
-`audit` и `colors` работают до нарезки и не требуют Bambu Studio.
-Железо берётся из hardware.json; A1_NOZZLE=0.2 переопределяет сопло.
+`audit` and `colors` run before slicing and do not need Bambu Studio.
+The machine comes from hardware.json; A1_NOZZLE overrides the nozzle.
 """
 import json, math, os, re, sys, zipfile
 
@@ -41,7 +41,7 @@ def audit(path):
     def say(level, what, why):
         out.append((level, what, why))
 
-    # --- совместимость с железом: это решает, откроется ли файл вообще
+    # --- compatibility with the machine: this decides whether the file opens at all
     pid = c.get("printer_settings_id", "")
     if pid != prof["machine"]:
         say(BLOCK, f"принтер в проекте: {pid}",
@@ -55,7 +55,7 @@ def audit(path):
         say(WARN, f"стол в проекте: {c.get('curr_bed_type')}",
             f"у нас {hw['printer']['plate']}; другой тип — другая температура стола")
 
-    # --- многоцветность: главная статья расхода
+    # --- multicolour: the main cost item
     if nfil > 1:
         say(WARN, f"{nfil} филамента: башня очистки "
                   f"{'включена' if str(c.get('enable_prime_tower')) == '1' else 'выключена'}",
@@ -73,7 +73,7 @@ def audit(path):
                 say(HINT, f"{k} = 1", "промывка прячется в деталь — экономит пластик, "
                                       "но подмешивает цвет внутрь стенок")
 
-    # --- то, что видно на поверхности фигурки
+    # --- what is visible on the surface of a figurine
     if str(c.get("wall_generator")) != "arachne":
         say(HINT, f"генератор стенок {c.get('wall_generator')}",
             "на органике arachne честно лучше: меньше мостов и щелевого заполнения")
@@ -93,7 +93,7 @@ def audit(path):
             "органические поддержки с ней несовместимы, а через CLI она дробит "
             "слои ниже min_layer_height экструдера")
 
-    # --- поддержки
+    # --- supports
     if str(c.get("enable_support")) == "1":
         st = c.get("support_style")
         if st != "tree_organic":
@@ -110,13 +110,13 @@ def audit(path):
             say(HINT, f"зазор поддержки сверху {ztd} при слое {lh}",
                 "PLA по PLA при однослойном зазоре приваривается; брать два слоя")
 
-    # --- прилипание
+    # --- adhesion
     if c.get("brim_type") in (None, "no_brim", "none"):
         say(HINT, "каймы нет",
             "у органики первый слой распадается на островки, связанные только выше; "
             "brim_type = outer_only, 5 мм")
 
-    # --- доедут ли значения до интерфейса вообще
+    # --- will the values reach the GUI at all
     dss = c.get("different_settings_to_system") or []
     if dss and not str(dss[0]).strip():
         say(BLOCK, "список different_settings_to_system пуст",
@@ -124,7 +124,7 @@ def audit(path):
             "здесь ключи. Всё остальное в файле декоративно — CLI этого не видит "
             "и режет по плоскому конфигу")
 
-    # --- размеры
+    # --- dimensions
     lh = c.get("layer_height")
     m = re.match(r"([\d.]+)mm", str(c.get("print_settings_id", "")))
     if m and lh and abs(float(m.group(1)) - float(lh)) > 1e-9:
@@ -156,7 +156,7 @@ def _wrap(s, n):
     return out
 
 
-# ---------------------------------------------------------------- цвет
+# ---------------------------------------------------------------- colour
 
 def _mesh_on_plate(path):
     """Вершины, грани и филамент на грань — в миллиметрах стола.
@@ -341,7 +341,7 @@ def colors(path):
         print(f"{f:>4} {col[f-1]:<9} {rows[-1][2]:>9} {rows[-1][3]:>6} "
               f"{100*rows[-1][3]/nlay:>10.0f}%  {zlo:6.1f} … {zhi:6.1f}")
 
-    # самый дорогой филамент: мало площади, много слоёв — за него платят сменами
+    # the costliest filament: little area, many layers - it is paid for in changes
     tot = sum(r[2] for r in rows)
     worst = sorted(rows, key=lambda r: (r[3] / nlay) / max(r[2] / tot, 1e-9), reverse=True)[:2]
     print("\nчто дороже всего обходится:")
@@ -352,7 +352,7 @@ def colors(path):
     print("  убрать его, свести в узкий диапазон по высоте или закрасить "
           "соседним цветом — самый прямой способ сократить печать")
 
-    # во что обойдётся отказ от каждого филамента: пересчёт смен без него
+    # what dropping each filament would save: changes recomputed without it
     print("\nесли отказаться от одного цвета (слить его с соседним):")
     base = changes
     for f in range(1, nfil + 1):
@@ -368,7 +368,7 @@ def colors(path):
     return 0
 
 
-# ---------------------------------------------------------------- факт
+# ---------------------------------------------------------------- the fact
 
 def gcode(path):
     import gcode_report

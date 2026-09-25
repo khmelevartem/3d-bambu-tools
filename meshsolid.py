@@ -1,36 +1,36 @@
 #!/usr/bin/env python3
-"""Пересобрать рваную сетку в сплошное тело: где внутренность — решают лучи,
-где именно проходит поверхность — знаковое поле расстояний.
+"""Rebuild a torn mesh into a solid body: rays decide where the interior is,
+a signed distance field decides where the surface runs.
 
-Когда нужен: `meshfix.py --remesh` (воксели Blender / OpenVDB) на сетке с
-большим числом открытых рёбер строит не тело, а КОРКУ — замкнутую плёнку
-вокруг поверхности. Признак: объём после ремонта близок к нулю (на `adam
-guitar 2.3mf` — 28.8 мм³ вместо 105 000 при 39 тыс. открытых рёбер), а в
-превью модель просвечивает кружевом. Объём корки растёт с вокселем линейно:
-0.15 мм -> 28.8 мм³, 0.3 мм -> 95.9 мм³ — это и есть диагноз.
+When it is needed: a voxel remesh on a mesh with many open edges builds not a
+body but a CRUST - a closed film around the surface. The sign is a volume close
+to zero after the repair while the preview shows the model through like lace.
+**The volume of a crust grows linearly with voxel size, and that is the
+diagnosis**; a real body's volume barely depends on it.
 
-Два шага, и каждый закрывает свою беду.
+Two steps, each closing its own failure.
 
-1. ЗАНЯТОСТЬ — лучами с учётом ЗНАКА пересечения (число оборотов). Рваный шов
-   даёт нулевой вклад, перекрывающиеся тела объединяются правильно — в отличие
-   от правила чёт-нечет, которое на перекрытии оставляет дыру. Лучи пускаются
-   по ВСЕМ ТРЁМ осям, и воксель считается внутренним по большинству (2 из 3).
-   Одной оси мало: там, где оболочка разорвана поперёк луча, он не находит
-   входа вовсе и оставляет сквозной тоннель через всю модель.
+1. OCCUPANCY - by rays, counting the SIGN of each crossing (the winding
+   number). A torn seam contributes zero and overlapping bodies combine
+   correctly, unlike parity, which leaves a hole wherever bodies overlap. Rays
+   go along ALL THREE axes and a voxel is interior by majority (2 of 3). One
+   axis is not enough: where the shell is torn across the ray, it finds no
+   entry at all and leaves a tunnel through the whole model.
 
-2. ПОВЕРХНОСТЬ — по знаковому полю расстояний в узкой полосе: расстояние от
-   центра вокселя до ближайшего треугольника, знак из шага 1. Бинарная
-   занятость (внутри/снаружи, без полутонов) даёт марширующим кубам лесенку
-   террас в половину вокселя, и на пологих местах — лбу, щеке — она читается
-   как горизонтали на топографической карте. У поля расстояний подвоксельное
-   положение поверхности сохранено, и колец не возникает.
+2. SURFACE - from a signed distance field in a narrow band: the distance from a
+   voxel centre to the nearest triangle, with the sign from step 1. Binary
+   occupancy discards the sub-voxel position of the surface, so marching cubes
+   return a staircase of half-voxel terraces, which on gentle areas reads as
+   contour lines on a map. A distance field keeps that position and produces no
+   rings.
 
-    uv run --with numpy --with scipy --with scikit-image python \\
-        tools/meshsolid.py вход.stl выход.stl --voxel 0.15
+    uv run --with numpy --with scipy --with scikit-image python \
+        tools/meshsolid.py in.stl out.stl --voxel 0.15
 
-Единицы — те же, в которых лежит вход: у сетки прямо из 3MF они свои, строка
-`!!` в `meshdoctor` говорит масштаб из <build>. Дальше `meshdoctor.py`
-подтверждает «ЧИСТО», а объём сверяется с исходным.
+**The voxel is in the units of the input.** A mesh taken straight out of a 3MF
+is in file units; the `!!` line in `meshdoctor` gives the scale from <build>.
+Afterwards `meshdoctor.py` must report CLEAN and the volume must match the
+original.
 """
 import argparse, struct, sys
 import numpy as np
@@ -40,7 +40,7 @@ from scipy.ndimage import gaussian_filter, binary_dilation
 from skimage.measure import marching_cubes
 
 
-# ------------------------------------------------------------------ ввод-вывод
+# ------------------------------------------------------------------- input/output
 def read_mesh(path):
     if path.endswith('.npz'):
         d = np.load(path, allow_pickle=True)
@@ -86,7 +86,7 @@ def orient_outward(V, F):
     return F, nc, int(flip.sum())
 
 
-# ------------------------------------------------------- занятость лучами
+# --------------------------------------------------- occupancy by rays
 def occupancy_axis(V, F, lo, N, H, r):
     """Занятость по лучам вдоль оси r. Массив bool в раскладке (nz, ny, nx)."""
     u, v = (r+1) % 3, (r+2) % 3
@@ -119,7 +119,7 @@ def occupancy_axis(V, F, lo, N, H, r):
     ti, ii, jj, U, W = ti[hit], ii[hit], jj[hit], U[hit], W[hit]
     nn, aa = n[ti], P[ti, 0]
     T = aa[:, r] - (nn[:, u]*(U-aa[:, u]) + nn[:, v]*(W-aa[:, v]))/nn[:, r]
-    s = np.where(nn[:, r] < 0, np.int8(1), np.int8(-1))     # входим / выходим
+    s = np.where(nn[:, r] < 0, np.int8(1), np.int8(-1))     # entering / leaving
     del nn, aa, U, W, a, b, c, hit, P, n
 
     o = np.lexsort((T, ii.astype(np.int64), jj.astype(np.int64)))
@@ -128,9 +128,9 @@ def occupancy_axis(V, F, lo, N, H, r):
     start = np.r_[0, np.flatnonzero(col[1:] != col[:-1])+1]
     length = np.diff(np.r_[start, len(col)])
     base = np.repeat(np.r_[0, w[:-1]][start], length)
-    w = w - base                                             # обороты внутри столбца
-    # сдвиг на минимум столбца: луч, начавшийся «внутри» вывернутого лоскута,
-    # иначе уводит весь столбец в минус и оставляет тоннель
+    w = w - base                                             # winding inside the column
+    # shift by the column minimum: a ray that started "inside" an inverted flap
+    # would otherwise drag the whole column negative and leave a tunnel
     cmin = np.minimum(np.minimum.reduceat(w, start), 0)
     w = w - np.repeat(cmin, length)
     last = np.r_[col[1:] != col[:-1], True]
@@ -147,7 +147,7 @@ def occupancy_axis(V, F, lo, N, H, r):
     return np.transpose(occ, [order.index(2), order.index(1), order.index(0)])
 
 
-# ------------------------------------------------- расстояние точка-треугольник
+# ------------------------------------------------- point-triangle distance
 def point_tri_dist2(p, a, b, c):
     """Квадрат расстояния от точек до треугольников (Ericson, ClosestPtPointTriangle)."""
     ab, ac, ap = b-a, c-a, p-a
@@ -162,21 +162,21 @@ def point_tri_dist2(p, a, b, c):
     den = va + vb + vc
     den = np.where(np.abs(den) < 1e-30, 1e-30, den)
     vv, ww = vb/den, vc/den
-    q = a + ab*vv[:, None] + ac*ww[:, None]                  # общий случай: внутри
-    # рёбра и вершины
-    m = (va <= 0) & ((d4-d3) >= 0) & ((d5-d6) >= 0)          # ребро BC
+    q = a + ab*vv[:, None] + ac*ww[:, None]                  # general case: interior
+    # edges and vertices
+    m = (va <= 0) & ((d4-d3) >= 0) & ((d5-d6) >= 0)          # edge BC
     if m.any():
         t = (d4[m]-d3[m])/np.maximum((d4[m]-d3[m]) + (d5[m]-d6[m]), 1e-30)
         q[m] = b[m] + (c[m]-b[m])*t[:, None]
-    m = (vb <= 0) & (d2 >= 0) & (d6 <= 0)                    # ребро AC
+    m = (vb <= 0) & (d2 >= 0) & (d6 <= 0)                    # edge AC
     if m.any():
         q[m] = a[m] + ac[m]*(d2[m]/np.maximum(d2[m]-d6[m], 1e-30))[:, None]
-    m = (vc <= 0) & (d1 >= 0) & (d3 <= 0)                    # ребро AB
+    m = (vc <= 0) & (d1 >= 0) & (d3 <= 0)                    # edge AB
     if m.any():
         q[m] = a[m] + ab[m]*(d1[m]/np.maximum(d1[m]-d3[m], 1e-30))[:, None]
-    m = (d1 <= 0) & (d2 <= 0); q[m] = a[m]                   # вершина A
-    m = (d3 >= 0) & (d4 <= d3); q[m] = b[m]                  # вершина B
-    m = (d6 >= 0) & (d5 <= d6); q[m] = c[m]                  # вершина C
+    m = (d1 <= 0) & (d2 <= 0); q[m] = a[m]                   # vertex A
+    m = (d3 >= 0) & (d4 <= d3); q[m] = b[m]                  # vertex B
+    m = (d6 >= 0) & (d5 <= d6); q[m] = c[m]                  # vertex C
     dq = p - q
     return np.einsum('ij,ij->i', dq, dq)
 
@@ -313,15 +313,15 @@ def build(V, F, H, band, sigma, slab):
         print(f'  лучи вдоль {nm}: внутри {int(o.sum())} вокселей')
         acc += o
         del o
-    occ = acc >= 2                       # большинство двух осей из трёх
+    occ = acc >= 2                       # majority of two axes out of three
     print(f'занято {int(occ.sum())} вокселей => объём {occ.sum()*H**3:.1f}; '
           f'оси разошлись на {int(((acc > 0) & (acc < 3)).sum())} вокселях')
     del acc
 
-    # Поле расстояний считается ЦЕЛИКОМ, а не по плитам: доращивание в дырках
-    # (extrapolate) размазывается на десятки вокселей, и у соседних плит
-    # значения на общей плоскости разошлись бы. Проверено 20.09.2026: при
-    # поплитном доращивании сетка рассыпалась на 12 тел и 9 non-manifold рёбер.
+    # The distance field is computed WHOLE, not in slabs: extrapolation into
+    # holes spreads over tens of voxels, and neighbouring slabs would disagree
+    # on the shared plane. With per-slab extrapolation the mesh falls apart
+    # into separate bodies with non-manifold edges.
     P = V[F]
     bb_lo, bb_hi = P.min(1), P.max(1)
     sdf = np.empty((nz, ny, nx), np.float32)

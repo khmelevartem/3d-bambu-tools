@@ -1,29 +1,27 @@
 #!/usr/bin/env python3
-"""Сварить вершины сетки в 3MF и заткнуть швы — БЕЗ потери покраски.
+"""Weld mesh vertices in a 3MF and patch the seams - WITHOUT losing paint.
 
-Зачем. Сетка, приехавшая из GLB (генераторы — Tripo, Hi3D, Meshy), разорвана
-по швам UV-развёртки: координаты вершин на шве совпадают, а индексы разные.
-Bambu Studio пишет её в 3MF как есть, и слайсер видит сотни отдельных тел с
-десятками тысяч «дырок», хотя форма замкнута. У `DUCK 2.3mf` (21.09.2026):
-676 тел и 90 665 открытых рёбер до, 1 тело и 2 открытых ребра после.
+A mesh that came from GLB is torn along the UV-unwrap seams: vertices on a seam
+have identical coordinates but different indices. Bambu Studio writes it into
+the 3MF as is, and the slicer sees hundreds of separate bodies with tens of
+thousands of "holes" on a shape that is in fact closed.
 
-Почему не `meshfix.py`. Тот чинит через Blender и меняет число и порядок
-треугольников, а `paint_color` привязан к НОМЕРУ треугольника — покраска
-после него бессмысленна и её приходится переносить по геометрии. Здесь
-порядок существующих граней не меняется совсем: переписываются только
-индексы вершин. Заплатки на оставшиеся дырки дописываются в КОНЕЦ списка
-и наследуют цвет соседней грани по ребру.
+Why not `meshfix.py`: it repairs through Blender and changes the number and the
+order of triangles, while `paint_color` is bound to a triangle's INDEX. Here
+the order of existing faces does not change at all - only vertex indices are
+rewritten. Patches for the remaining holes are appended at the END of the list
+and inherit the colour of the neighbouring face across the edge.
 
-    python3 tools/weldmesh.py вход.3mf выход.3mf
-    python3 tools/weldmesh.py вход.3mf выход.3mf --round 5   # грубее сварка
-    python3 tools/weldmesh.py вход.3mf выход.3mf --no-fill   # только сварка
+    python3 tools/weldmesh.py in.3mf out.3mf
+    python3 tools/weldmesh.py in.3mf out.3mf --round 5   # coarser welding
+    python3 tools/weldmesh.py in.3mf out.3mf --no-fill   # weld only
 
-Сварка идёт по точному совпадению координат (округление до `--round` знаков
-в единицах файла). Грубее 6 знаков брать не надо: на утке 1e-4 единицы уже
-рождали вырожденные грани и лишние non-manifold рёбра, а дырок не убавляло.
+Welding goes by exact coordinate match, rounded to `--round` decimals in file
+units. Do not go coarser than 6: looser rounding starts producing degenerate
+faces and extra non-manifold edges without closing any holes.
 
-После прогона — `meshdoctor.py` на результат: тел должно стать столько,
-сколько деталей, а объём обязан совпасть с исходным.
+Afterwards run `meshdoctor.py` on the result: the body count must equal the
+number of parts, and the volume must match the original.
 """
 import argparse, re, shutil, sys, zipfile
 import numpy as np
@@ -72,8 +70,8 @@ def weld(xml, decimals, fill):
             pts = np.unique(oe[lab[oe[:, 0]] == lp])
             centre[lp] = len(uq) + len(new_v)
             new_v.append(uq[pts].mean(axis=0))
-        # ребро граничной грани идёт a->b, значит заплатка берёт его как b->a:
-        # так нормаль заплатки смотрит в ту же сторону, что и у соседа
+        # a boundary face's edge runs a->b, so the patch takes it as b->a:
+        # that way the patch normal points the same way as its neighbour's
         new_t = [(b, a, centre[lab[a]]) for a, b in oe]
         attrs = attrs + [attrs[face_of[i]] for i in open_idx]
         uq = np.vstack([uq, np.array(new_v)])

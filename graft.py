@@ -1,39 +1,38 @@
 #!/usr/bin/env python3
-"""Прирастить к чужой сетке недостающий кусок, не потеряв покраску.
+"""Graft a missing piece onto a foreign mesh without losing the paint.
 
-Задача, ради которой написан: у скачанной фигурки оборван ремень (лямка, трос,
-цепочка, ручка) — деталь есть с одной стороны и отсутствует в пролёте. Дорисовать
-её надо так, чтобы стык не был виден, а `paint_color` остальной модели остался
-на своих местах.
+The case it was written for: a downloaded figurine has a broken strap (a sling,
+a cable, a chain, a handle) - the feature exists on one side and is absent
+across a span. It has to be drawn in so that the joint is invisible while the
+rest of the model keeps its `paint_color` in place.
 
-Ключ ко всему — **грани дописываются в КОНЕЦ** `<triangles>`: покраска привязана
-к номеру треугольника, поэтому старая нумерация обязана остаться нетронутой.
-Новая оболочка живёт в том же объекте отдельным телом и просто перекрывает
-существующие — слайсер сливает пересекающиеся тела одного объекта сам.
+The key to all of it: **faces are appended at the END** of `<triangles>`. Paint
+is bound to a triangle's index, so the old numbering must stay untouched. The
+new shell lives in the same object as a separate body and simply overlaps the
+existing ones - the slicer merges intersecting bodies of one object itself.
 
-Три шага, каждый отдельной подкомандой:
+Three steps, one subcommand each:
 
     UV="uv run --quiet --with numpy --with scipy python"
 
-    # 1. снять сечение существующей детали в точке стыка: ширина, толщина, куда смотрит
-    $UV tools/graft.py section модель.3mf --at -0.094,-6.9,3.834 --dir 0.59,-0.74,0.37
+    # 1. take a section of the existing feature at the joint: width, thickness, facing
+    $UV tools/graft.py section model.3mf --at X,Y,Z --dir DX,DY,DZ
 
-    # 2. замести это сечение по дуге от стыка до второй опоры
-    $UV tools/graft.py ribbon модель.3mf work/ribbon.npz \\
-        --at -0.094,-6.9,3.834 --dir 0.59,-0.74,0.37 --up -0.495,0.04,0.868 \\
-        --to 3.3,-8.15,5.25 --to-dir 0.9,-0.22,0.38
+    # 2. sweep that section along an arc from the joint to the second support
+    $UV tools/graft.py ribbon model.3mf work/ribbon.npz \
+        --at X,Y,Z --dir DX,DY,DZ --up UX,UY,UZ --to X,Y,Z --to-dir DX,DY,DZ
 
-    # 3. вписать в 3MF: вершины и грани в конец, face_count обновляется
-    $UV tools/graft.py put модель.3mf work/ribbon.npz новый.3mf --filament 1
+    # 3. write it into the 3MF: vertices and faces at the end, face_count updated
+    $UV tools/graft.py put model.3mf work/ribbon.npz new.3mf --filament 1
 
-Координаты везде **сырые единицы файла**, те же, что печатает `meshdoctor.py`;
-множитель <build> задаётся ключом `--scale`, он нужен только чтобы отчёт был
-в миллиметрах.
+Coordinates everywhere are **raw file units**, the same ones `meshdoctor.py`
+prints; the <build> multiplier is given with `--scale` and only serves to make
+the report read in millimetres.
 
-Проверено 21.09.2026 на `adam guitar 3 fixed 0.20.3mf`: ремень 2.84 × 0.94 мм,
-пролёт 15.7 мм от ягодицы до штифта на корпусе гитары. Сетка осталась замкнутой,
-покраска не сдвинулась ни на грань, нарезка выросла на 0.54 г (из них 0.51 г —
-поддержки под новый пролёт), число смен филамента не изменилось.
+Take the profile from the mesh itself rather than inventing it: a real strap
+has a flattened section sitting off-centre, and a guessed capsule leaves a
+visible step at the joint. Both ends must run a millimetre or two inside
+existing bodies. Prove the merge by slicing - `Inner wall` must not grow.
 """
 import argparse, os, re, sys, zipfile
 import numpy as np
@@ -43,7 +42,7 @@ VTX = re.compile(r'<vertex x="([^"]+)" y="([^"]+)" z="([^"]+)"\s*/>')
 FIL2CODE = {1: '4', 2: '8', 3: '0C', 4: '1C', 5: '2C', 6: '3C', 7: '4C'}
 
 
-# ----------------------------------------------------------------- чтение
+# ----------------------------------------------------------------- reading
 def model_entry(z):
     names = [n for n in z.namelist() if n.startswith('3D/') and n.endswith('.model')]
     big = [n for n in names if 'Objects/' in n]
@@ -70,7 +69,7 @@ def triple(s):
     return v
 
 
-# ----------------------------------------------------------------- сечение
+# ----------------------------------------------------------------- section
 def cross_section(V, F, p0, nrm, maxext=2.0):
     """Контуры сечения плоскостью (p0, nrm), мельче maxext в поперечнике.
 
@@ -141,7 +140,7 @@ def cmd_section(a):
     return 0
 
 
-# ------------------------------------------------------------------ лента
+# ------------------------------------------------------------------ ribbon
 def profile_from_mesh(V, F, at, dirv, up, M, maxext):
     """Профиль будущей ленты = настоящее сечение детали в точке стыка.
 
@@ -209,7 +208,7 @@ def sweep(prof, A, tA, n0, B, tB, bulge, nseg):
     F = np.array(F, np.int64)
     Pf = V[F]
     vol = np.einsum('ij,ij->i', Pf[:, 0], np.cross(Pf[:, 1], Pf[:, 2])).sum() / 6
-    if vol < 0:                       # нормали наружу — иначе слайсер видит дырку
+    if vol < 0:                       # normals outward, or the slicer sees a hole
         F = F[:, ::-1]; vol = -vol
     return V, F, P, vol
 
@@ -234,7 +233,7 @@ def cmd_ribbon(a):
     return 0
 
 
-# -------------------------------------------------------------- вписать в 3MF
+# -------------------------------------------------------- write into the 3MF
 def cmd_put(a):
     d = np.load(a.add, allow_pickle=True)
     V, F = d['V'], d['F']

@@ -1,44 +1,37 @@
 #!/usr/bin/env python3
-"""Расшить T-стыки в 3MF — БЕЗ потери покраски.
+"""Unstitch T-joints in a 3MF - WITHOUT losing the paint.
 
-Зачем. Когда модель красят кистью в Bambu Studio и сохраняют проект, слайсер
-**запекает мазки в геометрию**: дробит треугольники так, чтобы каждый вышел
-одноцветным. Соседний треугольник при этом не дробится, и на общем ребре
-остаётся чужая вершина — T-стык. Форма цела, объём верный, а связность рвётся:
-слайсер видит десятки тысяч «открытых рёбер» и сотни «тел». На
-`robbie albert.3mf` (24.09.2026) — 11 058 открытых рёбер и 822 тела при
-идеальной форме.
+When a model is painted with the brush and the project saved, the slicer bakes
+the strokes into the geometry: it splits triangles so that each comes out
+single-coloured. The neighbouring triangle is not split, so a foreign vertex is
+left on the shared edge - a T-joint. The shape is intact and the volume
+correct, while connectivity tears: the slicer reports tens of thousands of open
+edges and hundreds of bodies.
 
-Как чинится. Грань, на ребре которой сидит чужая вершина, разбивается веером
-из собственного центроида: контур грани обходится уже с учётом вставленных
-вершин, и каждая пара соседей замыкается на центроид. Центроид лежит
-**в плоскости грани**, поэтому форма не меняется ни на микрон, а потомки
-наследуют `paint_color` родителя — цвет остаётся на месте.
+The fix: a face carrying a foreign vertex on its edge is split into a fan from
+its own centroid. The centroid lies IN THE PLANE of the face, so the shape does
+not change at all, and the children inherit the parent's `paint_color`.
 
-    python3 tools/fixtjoints.py вход.3mf выход.3mf
-    python3 tools/fixtjoints.py вход.3mf --dry          # только диагноз
-    python3 tools/fixtjoints.py вход.3mf выход.3mf --tol 0.005
+    python3 tools/fixtjoints.py in.3mf out.3mf
+    python3 tools/fixtjoints.py in.3mf --dry          # diagnosis only
+    python3 tools/fixtjoints.py in.3mf out.3mf --tol 0.005
 
-Чем отличается от соседей по `tools/`:
+Against the neighbouring tools:
 
-- `weldmesh.py` сваривает вершины с совпадающими координатами (разрыв по швам
-  развёртки у сеток из GLB). На T-стыке координаты РАЗНЫЕ, и сварка не находит
-  ничего — на robbie albert схлопнулось 0 вершин из 1.23 млн;
-- `meshfix.py --holes` затыкает T-стык как дырку и плодит non-manifold
-  (на торсе Датча — 22 тыс. рёбер). Сперва T-стыки, потом дырки;
-- `meshsolid.py` пересобирает тело вокселями — покраску теряет целиком.
+- `weldmesh.py` welds vertices with identical coordinates (the UV-seam tear of
+  meshes coming from GLB). On a T-joint the coordinates DIFFER, so welding
+  finds nothing;
+- `meshfix.py --holes` plugs a T-joint as if it were a hole and breeds
+  non-manifold edges. T-joints first, holes second;
+- `meshsolid.py` rebuilds the body with voxels and loses the paint entirely.
 
-Порядок: сперва этот инструмент, потом `meshdoctor.py` на результат. Если
-после него остались дырки — они настоящие, их закрывает `weldmesh.py`.
+Run this first, then `meshdoctor.py` on the result. Holes still left are real
+ones, and `weldmesh.py` closes them.
 
-Грабли. Грань, дроблёная кистью на подтреугольники (длинный код вида
-`4444844344343`), несёт дерево разбиения внутри себя. Попав под веер, она
-отдаёт потомкам ПОЛНУЮ копию своего кода — рисунок внутри неё дублируется.
-Инструмент считает такие грани и говорит их суммарную площадь: на robbie
-albert под веер попали 10 таких граней общей площадью 0.08 мм² из 19 459 —
-тысячные доли процента поверхности. Если цифра окажется крупной, сперва
-`paint.py explode`: он разложит кисть на одноцветные подтреугольники (и сам
-наделает T-стыков, которые расшивает этот же инструмент).
+A face already split by the brush carries its subdivision tree inside its own
+code. Caught by the fan, it hands each child a FULL copy of that code, which
+duplicates the pattern inside it. The tool counts such faces and reports their
+total area; when that area is significant, run `paint.py explode` first.
 """
 import argparse, re, shutil, sys, zipfile
 import numpy as np

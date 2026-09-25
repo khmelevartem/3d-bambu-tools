@@ -1,68 +1,60 @@
 #!/usr/bin/env python3
-"""Собирает проект Bambu Studio (.3mf) с уже нанесённой покраской по треугольникам.
+"""Build a Bambu Studio project (.3mf) with per-triangle paint already applied.
 
-На входе — меш и массив номеров филамента (по вершинам или по граням),
-на выходе — .3mf, который открывается в Bambu Studio сразу раскрашенным,
-как будто зоны нарисовали кистью Color Painting. Руками ничего красить не надо.
+Input: a mesh plus an array of filament numbers (per vertex or per face).
+Output: a .3mf that opens in Bambu Studio already coloured, as if the zones had
+been drawn with the Color Painting brush.
 
-Запуск:
     uv run --with trimesh --with numpy python3 tools/make_multicolor_3mf.py \
         model.stl zones.npy -o model_color.3mf
 
-Как это устроено
-----------------
-Покраска живёт в атрибуте `paint_color` на `<triangle>` внутри
-`3D/Objects/object_1.model`. Это не 3MF-стандарт, а расширение Bambu Studio
-(унаследованное от PrusaSlicer, там тот же механизм зовётся
-`slic3rpe:mmu_segmentation`). Стандартные свойства треугольников по
-core-спецификации (`pid`/`p1`/`p2`/`p3`) Bambu Studio при загрузке
-ИГНОРИРУЕТ — проверено, см. bbs_3mf.cpp:_handle_object_start_triangle.
+How it works
+------------
+Paint lives in the `paint_color` attribute on `<triangle>` inside
+`3D/Objects/object_1.model`. This is not part of the 3MF standard but a Bambu
+Studio extension, inherited from PrusaSlicer where the same mechanism is called
+`slic3rpe:mmu_segmentation`. The standard core-specification triangle
+properties (`pid`/`p1`/`p2`/`p3`) are IGNORED by Bambu Studio on load - see
+bbs_3mf.cpp:_handle_object_start_triangle.
 
-Строка `paint_color` — это сериализованное дерево TriangleSelector: слайсер
-умеет дробить исходный треугольник на подтреугольники, чтобы граница цвета
-прошла внутри грани. Нам дробление не нужно — красим грань целиком, поэтому
-строка получается короткой, в один-два символа. Вывод кодировки:
+A `paint_color` string is a serialised TriangleSelector tree: the slicer can
+subdivide a triangle so that a colour border runs inside a face. Painting a
+whole face needs no subdivision, so the string is one or two characters. The
+encoding follows from the slicer source:
 
-  TriangleSelector::serialize() (TriangleSelector.cpp:1997) кладёт в поток
-  битов для НЕразбитого листа сначала два нуля («ноль разрезанных сторон»),
-  затем состояние. Если состояние n < 3 — два бита n. Если n >= 3 —
-  префикс 0b11 и потом тетрада (n - 3).
+  TriangleSelector::serialize() writes, for an UNSPLIT leaf, two zero bits
+  ("zero sides cut") followed by the state. For a state n < 3 that is the two
+  bits of n; for n >= 3 it is the prefix 0b11 followed by the nibble (n - 3).
 
-  FacetsAnnotation::get_triangle_as_string() (Model.cpp:4610) читает поток
-  тетрадами, каждую собирает младшим битом вперёд и вставляет символ
-  В НАЧАЛО строки — то есть тетрады в строке идут в обратном порядке.
+  FacetsAnnotation::get_triangle_as_string() reads the stream in nibbles,
+  assembles each least significant bit first, and inserts the character AT THE
+  FRONT of the string - so nibbles appear in reverse order.
 
-  Состояние — это EnforcerBlockerType (Model.hpp:716), где Extruder1 = 1,
-  Extruder2 = 2, Extruder3 = 3 и т. д. Что номер филамента = состоянию,
-  видно в GLGizmoMmuSegmentation.hpp:100:
-      get_left_button_state_type() { return EnforcerBlockerType(idx + 1); }
+  The state is EnforcerBlockerType, where Extruder1 = 1, Extruder2 = 2 and so
+  on; the filament number equals the state.
 
-  Отсюда для «вся грань покрашена филаментом N»:
-      N=1 -> биты 0,0,1,0 -> тетрада 4        -> "4"
-      N=2 -> биты 0,0,0,1 -> тетрада 8        -> "8"
-      N=3 -> 0,0,1,1 и 0,0,0,0 -> тетрады C,0 -> "0C"
-      N=4 -> 0,0,1,1 и 1,0,0,0 -> тетрады C,1 -> "1C"
-      N>=3 в общем виде -> hex(N-3) + "C"  (до N=17)
+  Hence, for "the whole face is painted with filament N":
+      N=1 -> bits 0,0,1,0 -> nibble 4        -> "4"
+      N=2 -> bits 0,0,0,1 -> nibble 8        -> "8"
+      N=3 -> 0,0,1,1 and 0,0,0,0 -> nibbles C,0 -> "0C"
+      N=4 -> 0,0,1,1 and 1,0,0,0 -> nibbles C,1 -> "1C"
+      N>=3 in general -> hex(N-3) + "C", up to N=17
 
-Грабли
-------
-* Непокрашенные грани печатаются филаментом, назначенным объекту
-  (`<metadata key="extruder">` в model_settings.config) — это «состояние 0».
-  Соблазн не красить самую большую зону вовсе: печать не меняется, а файл
-  короче. Так делать НЕ НАДО, и проверено, что Bambu Studio так не делает:
-  в файлах с MakerWorld `paint_color` стоит на каждой грани без исключения.
-  Соглашение «нет атрибута = экструдер объекта» знает слайсер, но не знает
-  посторонний читатель: аддон Blender ThreeMF_io отдавал такие грани первому
-  попавшемуся материалу, и фон фигурки красился чужим цветом (20.09.2026).
-  Экономия при этом — 1,7 % размера .3mf: XML лежит в zip и жмётся.
-* Число филаментов в project_settings.config должно быть не меньше
-  максимального номера: bbs_3mf.cpp:2382 сбрасывает extruder объекта в 1,
-  если он больше длины filament_settings_id.
-* Файл считается «родным» проектом Bambu только если в 3dmodel.model есть
-  <metadata name="Application">BambuStudio-...</metadata> (bbs_3mf.cpp:4237).
-  Иначе слайсер идёт по ветке «чужой 3mf» и трактует часть данных иначе.
-* Кавычки внутри value="..." в model_settings.config надо экранировать.
-  Сам Bambu Studio этого не делает и пишет нечитаемый XML — см. --fix-quotes.
+Rules
+-----
+* **Write a code on every face, the background included.** An uncoloured face
+  prints with the filament assigned to the object ("state 0"), so skipping the
+  largest zone changes nothing for the slicer and shortens the file by under
+  two percent. But that convention is known only to the slicer: outside it,
+  such faces take an arbitrary material. MakerWorld originals carry a code on
+  every face without exception.
+* The filament count in project_settings.config must be at least the highest
+  number used, or the object's extruder is reset to 1.
+* A file counts as a native Bambu project only when 3dmodel.model carries an
+  Application metadata entry naming Bambu Studio. Otherwise the slicer takes
+  its foreign-3mf branch and interprets part of the data differently.
+* Quotes inside value="..." in model_settings.config must be escaped. Bambu
+  Studio itself does not do this and writes unreadable XML - see --fix-quotes.
 """
 import argparse
 import json
@@ -73,18 +65,18 @@ import zipfile
 import numpy as np
 import trimesh
 
-import hardware                       # имена пресетов — из hardware.json
+import hardware                       # preset names come from hardware.json
 
-BED = 256.0                       # стол A1, мм
-MAX_FILAMENT = 17                 # дальше кодировка требует ещё одну тетраду
+BED = 256.0                       # bed size, mm
+MAX_FILAMENT = 17                 # beyond this the encoding needs another nibble
 
-# Профили филаментов по умолчанию — под AMS lite этой мастерской.
+# Default filament profiles.
 DEFAULT_FILAMENTS = [
-    # (имя профиля, код филамента, цвет в интерфейсе)
-    ("Bambu PLA Basic @BBL A1", "GFA00", "#F4EE2A"),   # жёлтый
-    ("Bambu PLA Basic @BBL A1", "GFA00", "#8E9089"),   # серый
-    ("Bambu PLA Basic @BBL A1", "GFA00", "#7C4B27"),   # коричневый
-    ("Bambu PLA Matte @BBL A1", "GFA01", "#E88A28"),   # мандариновый
+    # (profile name, filament code, colour shown in the GUI)
+    ("Bambu PLA Basic @BBL A1", "GFA00", "#F4EE2A"),   # yellow
+    ("Bambu PLA Basic @BBL A1", "GFA00", "#8E9089"),   # grey
+    ("Bambu PLA Basic @BBL A1", "GFA00", "#7C4B27"),   # brown
+    ("Bambu PLA Matte @BBL A1", "GFA01", "#E88A28"),   # tangerine
 ]
 
 
@@ -97,10 +89,10 @@ def paint_code(filament: int) -> str:
     if not 1 <= filament <= MAX_FILAMENT:
         raise ValueError(f"номер филамента вне диапазона 1..{MAX_FILAMENT}: {filament}")
     if filament < 3:
-        # Две младшие тетрады: [0,0] «не разрезан» + два бита состояния.
+        # The two low nibbles: [0,0] "not split" plus two state bits.
         return "48"[filament - 1]
-    # Префикс 0b1100 = 'C' идёт первой тетрадой в потоке, но в строке
-    # тетрады перевёрнуты, поэтому 'C' оказывается последней.
+    # The prefix 0b1100 = 'C' is the first nibble in the stream, but nibbles
+    # are reversed in the string, so 'C' ends up last.
     return "%X" % (filament - 3) + "C"
 
 
@@ -213,7 +205,7 @@ def build_root_model(offset, app_version: str) -> bytes:
         ' xmlns:BambuStudio="http://schemas.bambulab.com/package/2021"'
         ' xmlns:p="http://schemas.microsoft.com/3dmanufacturing/production/2015/06"'
         ' requiredextensions="p">\n'
-        # Без этой строки слайсер считает файл чужим (bbs_3mf.cpp:4237)
+        # Without this line the slicer treats the file as foreign
         f' <metadata name="Application">BambuStudio-{app_version}</metadata>\n'
         ' <metadata name="BambuStudio:3mfVersion">1</metadata>\n'
         ' <resources>\n'
@@ -245,7 +237,7 @@ def build_model_settings(name: str, base: int, face_count: int, oid: int = 2) ->
         '<config>\n'
         f'  <object id="{oid}">\n'
         f'    <metadata key="name" value="{xml_escape(name)}"/>\n'
-        # extruder объекта = филамент для НЕпокрашенных граней
+        # the object's extruder is the filament for UNPAINTED faces
         f'    <metadata key="extruder" value="{base}"/>\n'
         f'    <metadata face_count="{face_count}"/>\n'
         '    <part id="1" subtype="normal_part">\n'
@@ -300,7 +292,7 @@ def build_project_settings(filaments, printer: str, process: str) -> bytes:
     cfg.update(rp.flatten(process, idx))
 
     per_filament = [rp.flatten(nm, idx) for nm, _id, _col in filaments]
-    # Ключи, которые в профиле филамента означают не «на слот», а что-то своё.
+    # Keys that in a filament profile mean something other than "per slot".
     not_per_slot = {"type", "from", "name", "filament_id", "compatible_printers",
                     "compatible_printers_condition", "filament_ingredients_safe",
                     "filament_emission_safe", "filament_contact_safe"}
@@ -323,20 +315,20 @@ def build_project_settings(filaments, printer: str, process: str) -> bytes:
         "filament_settings_id": [f[0] for f in filaments],
         "filament_ids": [f[1] for f in filaments],
         "filament_colour": [f[2] for f in filaments],
-        # filament_map — это «филамент -> экструдер», а не «-> слот AMS».
-        # У A1 экструдер один, поэтому везде единицы.
+        # filament_map is "filament -> extruder", not "-> AMS slot".
+        # This machine has one extruder, so it is ones everywhere.
         "filament_map": ["1"] * n,
         "filament_map_mode": "Auto For Flush",
     })
-    # Расплющенный профиль — это дамп ПРЕСЕТА, и в нём остаются ключи,
-    # которых в конфиге проекта быть не должно: "type", "include",
-    # "description", "is_custom_defined". У Bambu Studio есть проверка
-    # (строка в бинарнике: found invalid config type %1% from config %2%),
-    # поэтому их убираем. Но имейте в виду: убрать их — необходимо, а не
-    # достаточно. Файл без этих ключей интерфейс всё равно не открывает,
-    # почему так — в скилле 3d-modeling, references/bambu-cli.md.
-    # Сравнивать свой набор ключей полезно с тем, что пишет
-    # сама Bambu Studio: прогнать через --export-3mf и взять set(мой)-set(её).
+    # A flattened profile is a dump of a PRESET and still carries keys that
+    # must not appear in a project config: "type", "include", "description",
+    # "is_custom_defined". Bambu Studio validates config types, so they are
+    # removed here. Note that removing them is necessary, not sufficient:
+    # the GUI still will not open such a file. Why is in the 3d-modeling
+    # skill, references/bambu-cli.md.
+    # skill, references/bambu-cli.md. A useful check is against what Bambu
+    # Studio itself writes for the same model - hence the --export-3mf
+    # comparison: run a file through --export-3mf and diff the key sets.
     for key in ("type", "include", "description", "is_custom_defined",
                 "compatible_printers", "compatible_printers_condition",
                 "instantiation", "setting_id", "inherits"):
@@ -439,9 +431,9 @@ def main() -> None:
                  f"добавьте --colors/--filaments")
     filaments = filaments[:max(slots, 1)]
 
-    # Самый частый филамент назначаем объекту как extruder — но красим и его
-    # грани тоже. Пропуск атрибута у фоновых граней экономил 1,7 % .3mf и
-    # стоил того, что вне слайсера цвет фона читался неверно.
+    # The most frequent filament is assigned to the object as its extruder,
+    # but its faces are painted too: omitting the attribute on background
+    # faces makes the background read as the wrong colour outside the slicer.
     counts = np.bincount(face_fil, minlength=slots + 1)
     base = int(counts.argmax())
 
@@ -451,7 +443,7 @@ def main() -> None:
         print(f"  филамент {n} ({filaments[n-1][2]}): {counts[n]/len(face_fil)*100:5.1f}%"
               f"  paint_color={paint_code(n)!r}{mark}")
 
-    # На стол: центр габарита в центр стола, низ на z = 0.
+    # Onto the bed: bounding box centre at the bed centre, bottom at z = 0.
     lo, hi = mesh.bounds
     if a.no_center:
         offset = (0.0, 0.0, 0.0)
@@ -461,7 +453,7 @@ def main() -> None:
 
     os.makedirs(os.path.dirname(os.path.abspath(a.out)) or ".", exist_ok=True)
     name = os.path.basename(a.mesh)
-    # ZIP_DEFLATED обязателен: несжатый XML на 2 млн граней — под 200 МБ.
+    # ZIP_DEFLATED is mandatory: uncompressed XML for millions of faces is huge.
     with zipfile.ZipFile(a.out, "w", zipfile.ZIP_DEFLATED, compresslevel=6) as z:
         z.writestr("[Content_Types].xml", CONTENT_TYPES)
         z.writestr("_rels/.rels", ROOT_RELS)

@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
-"""Убрать непечатаемый крап и волосяные линии в покраске 3MF.
+"""Remove unprintable speckle and hairline strokes from 3MF paint.
 
-Сопло не умеет класть полосу уже своей линии: цветной кусок тоньше ширины
-линии в пластике не появится, а в нарезке превратится в лишнюю смену филамента.
-Здесь такие куски отдаются соседу, с которым у них самая длинная граница.
+A nozzle cannot lay a band narrower than its own line: a colour fragment
+thinner than that never reaches the plastic, it only adds a filament change.
+Such fragments are given to the neighbour they share the longest border with.
 
-Мерой «тонкости» взята эффективная ширина w = 2*S/L (для полосы шириной w
-площадь S = w*l, периметр L ~ 2*l). Куски тоньше --min-width или мельче
---min-area перекрашиваются; счёт идёт в НАСТОЯЩИХ миллиметрах — масштаб
-из <build> берётся ключом --scale.
+The measure of "thinness" is the effective width w = 2*S/L (for a band of
+width w the area is S = w*l and the perimeter L ~ 2*l). Fragments thinner
+than --min-width or smaller than --min-area are repainted; the count is in
+REAL millimetres — the scale from <build> is supplied with --scale.
 
     uv run --with numpy --with scipy python tools/paint_despeckle.py \\
         work/p.npz work/p2.npz --scale 3.9397 --min-width 0.6 --min-area 1.0
@@ -18,12 +18,12 @@ from scipy.sparse.csgraph import connected_components
 
 ap = argparse.ArgumentParser()
 ap.add_argument('src'); ap.add_argument('dst')
-ap.add_argument('--scale', type=float, default=1.0, help='во сколько раз <build> увеличивает сетку')
-ap.add_argument('--min-width', type=float, default=0.6, help='мм, эффективная ширина куска')
-ap.add_argument('--min-area',  type=float, default=1.0, help='мм2')
-ap.add_argument('--keep', default='', help='филаменты, которые не трогать, через запятую')
+ap.add_argument('--scale', type=float, default=1.0, help='factor by which <build> scales the mesh')
+ap.add_argument('--min-width', type=float, default=0.6, help='mm, effective width of a fragment')
+ap.add_argument('--min-area',  type=float, default=1.0, help='mm2')
+ap.add_argument('--keep', default='', help='filaments to leave alone, comma separated')
 ap.add_argument('--rounds', type=int, default=4)
-ap.add_argument('--only-on', default='', help='перекрашивать только куски, чей сосед — из этого списка')
+ap.add_argument('--only-on', default='', help='repaint only fragments whose neighbour is in this list')
 a = ap.parse_args()
 
 d = dict(np.load(a.src, allow_pickle=True))
@@ -39,8 +39,8 @@ for it in range(a.rounds):
     same = lab[ea] == lab[eb]
     g = sp.coo_matrix((np.ones(same.sum()), (ea[same], eb[same])), shape=(n, n))
     nc, cc = connected_components(g, directed=False)
-    A = np.bincount(cc, weights=area, minlength=nc) * S2          # мм2
-    # длина границы куска и сосед с самой длинной общей границей
+    A = np.bincount(cc, weights=area, minlength=nc) * S2          # mm2
+    # border length per fragment, and the neighbour with the longest shared border
     bnd = ~same
     ca, cb, ln = cc[ea[bnd]], cc[eb[bnd]], elen[bnd] * S
     L = np.bincount(ca, weights=ln, minlength=nc) + np.bincount(cb, weights=ln, minlength=nc)
@@ -52,7 +52,7 @@ for it in range(a.rounds):
     idx = np.flatnonzero(bad)
     if not len(idx):
         print(f'проход {it+1}: чистить нечего'); break
-    # сосед-победитель по длине общей границы
+    # winning neighbour by shared border length
     src = np.r_[ca, cb]; dstl = np.r_[lab[eb[bnd]], lab[ea[bnd]]]; wl = np.r_[ln, ln]
     order = np.lexsort((-wl, dstl.astype(np.int64), src.astype(np.int64)))
     src, dstl, wl = src[order], dstl[order], wl[order]

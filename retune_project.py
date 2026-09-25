@@ -1,39 +1,39 @@
 #!/usr/bin/env python3
-"""Перенести настройки печати в проект, сохранённый интерфейсом Bambu Studio.
+"""Port print settings into a project saved by the Bambu Studio GUI.
 
-Зачем. Проект, собранный кодом (`make_multicolor_3mf.py`), интерфейс не
-открывает: «Invalid configuration file» и следом «The file does not contain
-any geometry data». Рабочий обход — отдать файл с `--no-project`, дать
-человеку открыть и сохранить его, а настройки досылать уже в ЕГО файл:
-оболочку и `project_settings.config` там написала сама Bambu Studio.
+Why. A project assembled in code (`make_multicolor_3mf.py`) will not open
+in the GUI: "Invalid configuration file" and then "The file does not contain
+any geometry data". The working way around is to hand the file over with
+`--no-project`, let the human open and save it, and send the settings into
+THEIR file: its shell and `project_settings.config` were written by Bambu itself.
 
-    python3 tools/retune_project.py файл_человека.3mf -o готовый.3mf
-    python3 tools/retune_project.py файл.3mf -o готовый.3mf \
+    python3 tools/retune_project.py human_file.3mf -o ready.3mf
+    python3 tools/retune_project.py file.3mf -o ready.3mf \
         --from "models/adam guitar/adam guitar 2.3mf"
 
-Что переносится: значения ключей из эталонного проекта — того, который
-Bambu Studio сохранила с нужным соплом и процессом.
+What gets ported: key values from a reference project — one that Bambu
+Studio saved with the right nozzle and process.
 
-Что НЕ трогается, и это главное:
+What is NOT touched, and this is the important part:
 
-* `different_settings_to_system` — список правок относительно системного
-  пресета. **Его нельзя сочинять.** 20.09.2026 проверено на
-  `robbie albert hand lower`: со списком, написанным мной (11 ключей,
-  включая `curr_bed_type`), интерфейс файл не открыл; с тем же файлом, где
-  список остался авторский, — открыл. Больше отличий между попытками не было.
-* **сами ключи из этого списка** — это то, что человек менял руками:
-  включённые поддержки, выбранный слой, выключенная башня. Эталон несёт
-  свои решения по тем же ключам, и без этой оговорки перенос гасит чужую
-  работу: на `robbie albert` эталон выключал поддержки, которые человек
-  включил.
-* `filament_colour` — цвета, которые человек выбрал под свои катушки.
-* хосты печати (`host_type`, `printhost_*`) — они про его аккаунт.
+* `different_settings_to_system` — the list of edits relative to the system
+  preset. **It must not be invented.** Verified 2026-09-20 on
+  `robbie albert hand lower`: with a list written by me (11 keys, including
+  `curr_bed_type`) the GUI would not open the file; the same file with the
+  author's list left intact opened. Nothing else differed between the tries.
+* **the keys in that list themselves** — they are what the human changed by
+  hand: supports switched on, the layer chosen, the prime tower switched off.
+  The reference carries its own decisions for the same keys, and without this
+  caveat the port wipes their work: on `robbie albert` the reference turned
+  off supports the human had turned on.
+* `filament_colour` — the colours they picked for their own spools.
+* print hosts (`host_type`, `printhost_*`) — those are about their account.
 
-Следствие, о котором надо сказать вслух. Интерфейс берёт системный пресет и
-накладывает только ключи из `different_settings_to_system`. Значит правки,
-которых в этом списке нет, доедут до CLI-нарезки, но в интерфейсе человек их
-не увидит — их он ставит руками (и лучше сохраняет своим пресетом). Числа,
-посчитанные `slice.sh` и `figopt.py` по такому файлу, описывают CLI-нарезку.
+A consequence worth saying out loud. The GUI takes the system preset and
+applies only the keys from `different_settings_to_system`. So edits that are
+not in that list do reach a CLI slice, but the human will not see them in
+the GUI — those they set by hand (and better, save as their own preset).
+Numbers from `slice.sh` and `figopt.py` on such a file describe the CLI slice.
 """
 import argparse
 import collections
@@ -44,10 +44,10 @@ import zipfile
 
 DEFAULT_REF = "models/adam guitar/adam guitar 2.3mf"
 
-# Не переносим: это выбор человека либо структура, которую пишет интерфейс.
+# Not ported: either the human's choice, or structure the GUI writes itself.
 KEEP = {
-    "different_settings_to_system",     # см. докстроку — сочинять нельзя
-    "filament_colour",                  # его катушки
+    "different_settings_to_system",     # see the docstring — never invent it
+    "filament_colour",                  # their spools
     "host_type", "printhost_authorization_type", "printhost_ssl_ignore_revoke",
     "filament_colour_type", "filament_multi_colour", "extruder_nozzle_stats_new",
 }
@@ -56,7 +56,7 @@ CFG = "Metadata/project_settings.config"
 
 
 def paint_signature(path):
-    """Отпечаток геометрии и покраски: число треугольников и счётчики кодов."""
+    """Fingerprint of geometry and paint: triangle count and code counters."""
     z = zipfile.ZipFile(path)
     names = [n for n in z.namelist() if n.endswith(".model") and "Objects" in n]
     raw = z.read(names[0] if names else "3D/3dmodel.model").decode("utf-8", "replace")
@@ -69,10 +69,10 @@ def paint_signature(path):
 def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("src", help="проект, сохранённый интерфейсом Bambu Studio")
-    ap.add_argument("-o", "--out", required=True, help="куда писать результат")
+    ap.add_argument("src", help="project saved by the Bambu Studio GUI")
+    ap.add_argument("-o", "--out", required=True, help="where to write the result")
     ap.add_argument("--from", dest="ref", default=DEFAULT_REF,
-                    help=f"эталон настроек, тоже сохранённый интерфейсом (по умолчанию {DEFAULT_REF})")
+                    help=f"settings reference, also saved by the GUI (default {DEFAULT_REF})")
     ap.add_argument("--quiet", action="store_true")
     a = ap.parse_args()
 
@@ -83,7 +83,7 @@ def main():
     mine = json.loads(zin.read(CFG).decode("utf-8"))
     ref = json.loads(zipfile.ZipFile(a.ref).read(CFG).decode("utf-8"))
 
-    # Ключи, которые человек правил руками, — их интерфейс и перечислил.
+    # The keys the human edited by hand — the GUI listed them itself.
     hands = {k for part in mine.get("different_settings_to_system", [])
              for k in part.split(";") if k}
     keep = KEEP | hands

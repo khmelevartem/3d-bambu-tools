@@ -1,57 +1,52 @@
 #!/usr/bin/env python3
-"""Править чужой 3MF **частями**, не трогая ни одной его грани.
+"""Edit a foreign 3MF **by parts**, without touching a single one of its faces.
 
-У объекта Bambu Studio может быть несколько частей: `normal_part` добавляется
-к объёму, `negative_part` из него вычитается. Значит форму скачанной модели
-можно менять, не пересчитывая её сетку, — а раз сетка цела, цела и покраска:
-`paint_color` привязан к номеру треугольника, и любая булева операция её
-теряет, а часть — нет.
+A Bambu Studio object may have several parts: a `normal_part` adds volume and a
+`negative_part` subtracts it. So a downloaded model's shape can be changed
+without recomputing its mesh - and while the mesh is intact, so is the paint:
+`paint_color` is bound to a triangle's index, which any boolean loses and a
+part does not.
 
-    python3 tools/partedit.py list  проект.3mf
-    python3 tools/partedit.py apply задание.json
+    python3 tools/partedit.py list  project.3mf
+    python3 tools/partedit.py apply job.json
 
-Задание (JSON): `src`, `dst` и список `ops`, они выполняются по порядку.
+The job is JSON with `src`, `dst` and a list of `ops` executed in order:
 
-    {"src": "проект.3mf", "dst": "новый.3mf", "ops": [
-      {"op": "part",   "object": "Рука правая", "name": "Канал под сигару",
+    {"src": "project.3mf", "dst": "new.3mf", "ops": [
+      {"op": "part",   "object": "Right arm", "name": "Channel",
        "subtype": "negative_part",
        "mesh": {"kind": "cylinder", "c": [8.9,-8.1,-1.4], "axis": [-0.69,0.67,-0.28],
                 "r": 1.23, "t0": -4.5, "t1": 8.0}},
-      {"op": "part",   "object": "Тело в кресле", "name": "Пробка бедра",
-       "mesh": {"kind": "sphere", "c": [7.14,5.63,6.02], "r": 2.9}},
-      {"op": "move",   "from": "Нога левая", "to": "Тело в кресле",
-       "R": [[1,0,0],[0,1,0],[0,0,1]], "T": [0,0,0]},
-      {"op": "drop",   "name": "Нога левая"},
-      {"op": "shift",  "name": "Тело в кресле", "d": [0,0,-1.2]},
-      {"op": "object", "name": "Сигара", "extruder": 2, "plate": 2,
-       "pos": [505,120,0],
-       "mesh": {"kind": "cylinder", "c": [0,0,0], "axis": [0,0,1], "r": 1.13,
-                "t0": 0, "t1": 8.7}},
+      {"op": "move",   "from": "Left leg", "to": "Body", "R": [[1,0,0],[0,1,0],[0,0,1]], "T": [0,0,0]},
+      {"op": "drop",   "name": "Left leg"},
+      {"op": "shift",  "name": "Body", "d": [0,0,-1.2]},
+      {"op": "object", "name": "Cigar", "extruder": 2, "plate": 2, "pos": [505,120,0],
+       "mesh": {"kind": "cylinder", "c": [0,0,0], "axis": [0,0,1], "r": 1.13, "t0": 0, "t1": 8.7}},
       {"op": "drop_plate", "id": 4}]}
 
-`mesh` — это либо примитив (`box` с lo/hi, `cylinder`, `sphere`), либо
-`{"kind": "npz", "path": "…"}` с массивами V и F.
+`mesh` is either a primitive (`box` with lo/hi, `cylinder`, `sphere`) or
+`{"kind": "npz", "path": "..."}` carrying V and F arrays.
 
-Правила формата, сверенные с исходниками BambuStudio (`bbs_3mf.cpp`) и
-проверенные нарезкой 24.09.2026 на «dutch on chair»:
+Format rules, checked against the slicer source and confirmed by slicing:
 
-* Тип части — атрибут `subtype` у `<part>` в `Metadata/model_settings.config`,
-  значения `normal_part`, `negative_part`, `modifier_part`, `support_blocker`,
-  `support_enforcer`. Незнакомая строка молча читается как `normal_part`.
-* `<part id=…>` находит свой меш по СОВПАДЕНИЮ id с `objectid` компонента
-  в `3D/3dmodel.model`, а не по порядку. Часть с чужим id не игнорируется,
-  а становится `normal_part` — сбой, который в превью не видно.
-* **Порядок частей решает**: отрицательный объём вычитается только из тех
-  частей, что стоят ВЫШЕ него в списке. Поэтому новые части дописываются
-  в конец `<components>` и в конец `<object>` в конфиге.
-* Низ детали срезать `negative_part` не нужно: объект достаточно утопить
-  (`shift`), ниже стола слайсер всё равно ничего не печатает. Коробка-резак
-  вдобавок тянет вниз bbox объекта, и в интерфейсе деталь выглядит утопленной.
-* Отрицательная часть, торчащая ниже стола, расширяет bbox — сверять после
-  правки не превью, а нарезку: превью `negative_part` не показывает.
-
-Проверка результата — нарезкой, а не глазами: `--slice` и сравнение профиля
-слоёв с исходником (площадь первого слоя, высота, смены филамента).
+* The part type is the `subtype` attribute on `<part>` in
+  `Metadata/model_settings.config`: `normal_part`, `negative_part`,
+  `modifier_part`, `support_blocker`, `support_enforcer`. **An unknown string
+  is silently read as `normal_part`.**
+* `<part id=...>` finds its mesh by MATCHING the id against a component's
+  `objectid`, not by position. A part with a foreign id is not ignored but
+  becomes a `normal_part` - a failure invisible in the preview.
+* **Part order decides**: a negative volume is subtracted only from parts
+  listed ABOVE it. New parts are therefore appended at the end of
+  `<components>` and at the end of `<object>` in the config.
+* **Do not cut a part's bottom with a `negative_part`.** Sink the object
+  instead (`shift`); the slicer prints nothing below the bed anyway. A cutter
+  box additionally drags the object's bounding box down, and the part looks
+  sunken in the GUI.
+* A negative part sticking out below the bed widens the bounding box. **Verify
+  an edit by slicing, not by the preview** - the preview does not show negative
+  parts. Compare the layer profile against the original: first-layer area,
+  height, filament changes.
 """
 
 import numpy as np
@@ -81,9 +76,9 @@ def cylinder(c, ax, r, t0, t1, seg=96):
     F=[]
     for i in range(n):
         j=(i+1)%n
-        F += [[i,j,n+j],[i,n+j,n+i]]        # бок
-        F += [[b0,j,i]]                      # низ
-        F += [[b1,n+i,n+j]]                  # верх
+        F += [[i,j,n+j],[i,n+j,n+i]]        # side
+        F += [[b0,j,i]]                      # bottom
+        F += [[b1,n+i,n+j]]                  # top
     return V, np.array(F,np.int64)
 
 def sphere(c, r, nu=48, nv=24):
@@ -168,7 +163,7 @@ class Project:
         self.cfg = self.files['Metadata/model_settings.config'].decode()
         self.next_id = 100
 
-    # --- чтение ---
+    # --- reading ---
     def object_id(self, name):
         for oid, blk in re.findall(r'<object id="(\d+)">(.*?)</object>', self.cfg, re.S):
             if f'key="name" value="{name}"' in blk:
@@ -179,10 +174,10 @@ class Project:
         m = re.search(r'<object id="%s"[^>]*>(.*?)</object>' % oid, self.top, re.S)
         return re.search(r'p:path="([^"]+)"', m.group(1)).group(1).lstrip('/')
 
-    # --- запись ---
+    # --- writing ---
     def _new_ids(self):
         self.next_id += 2
-        return self.next_id - 2, self.next_id - 1     # внутренний, внешний
+        return self.next_id - 2, self.next_id - 1     # inner, outer
 
     def add_mesh_file(self, V, F, code=None):
         """Новый 3D/Objects/object_N.model. Возвращает (путь, id внутри файла)."""

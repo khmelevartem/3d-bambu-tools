@@ -1,79 +1,80 @@
 #!/usr/bin/env python3
-"""Резка тела правильными телами: плоскости и цилиндры, ниши и штифты.
+"""Cut a body with proper bodies: planes and cylinders, sockets and pins.
 
-Здесь не «срезают поверхность одного цвета», а делят **объём**: каждая деталь
-получается пересечением исходного тела с полупространствами и цилиндрами, так
-что сумма деталей и есть исходное тело. Все внутренние поверхности заданы
-числами (плоскость, цилиндр), а не срисованы с дрожащей границы покраски.
+This does not peel the surface of one colour - it divides the **volume**: each
+part is the intersection of the original body with half-spaces and cylinders,
+so the parts sum back to the original. Every internal surface is defined by
+numbers, not traced from a wobbling paint border.
 
     uv run --with numpy --with scipy python tools/solid_cut.py fit work/e.npz
     uv run --with numpy --with scipy --with shapely --with mapbox_earcut \
            --with scikit-image python tools/solid_cut.py inlay work/e.npz \
-           --filament 4 --scale 2 --assembly 0,0,1 --out work/parts/штрих
+           --filament 4 --scale 2 --assembly 0,0,1 --out work/parts/stroke
     python3 tools/solid_cut.py cut   work/spec.json
-    python3 tools/solid_cut.py check исходник.stl деталь1.stl деталь2.stl …
+    python3 tools/solid_cut.py check source.stl part1.stl part2.stl ...
 
-Порядок работы
---------------
-1. `paint.py explode` — покраска кистью в сетку, где грань одноцветна;
-2. `solid_cut.py fit` — по границам цвета находятся плоскости и окружности;
-3. руками пишется спецификация: какие плоскости режут, где штифты и ниши;
-4. `solid_cut.py cut` — Blender считает булевы точным решателем;
-5. `solid_cut.py check` — детали не лезут друг в друга и складываются в исходное.
+Order of work
+-------------
+1. `paint.py explode` - brush paint into a mesh whose faces are single-coloured;
+2. `solid_cut.py fit` - planes and circles found from the colour borders;
+3. write the specification by hand: which planes cut, where pins and sockets go;
+4. `solid_cut.py cut` - Blender computes the booleans with the exact solver;
+5. `solid_cut.py check` - the parts do not intrude into each other and sum to
+   the original.
 
-Спецификация (JSON)
--------------------
-    {"src": "тело.stl",
-     "parts": [{"name": "…", "out": "…stl", "src": "своё_тело.stl", "ops": [
+Specification (JSON)
+--------------------
+    {"src": "body.stl",
+     "parts": [{"name": "...", "out": "....stl", "src": "own_body.stl", "ops": [
          {"kind":"plane",  "n":[0,0,-1], "d":2.9647, "op":"INTERSECT"},
          {"kind":"cyl",    "axis":[0,0,1], "t0":-3.5, "t1":0.74, "r":3.1,
           "at":[0,0,0], "op":"DIFFERENCE"},
          {"kind":"region", "planes":[[[0,0,1],10.95], [[-1,-1,0],0]],
           "op":"DIFFERENCE"},
-         {"kind":"mesh",   "path":"другое_тело.stl", "op":"UNION"}]}]}
+         {"kind":"mesh",   "path":"other_body.stl", "op":"UNION"}]}]}
 
-`src` у детали перекрывает общий: у сборки из перекрывающихся тел каждая
-деталь режется из своего. `plane` — полупространство n·x ≤ d.
-`mesh` — резак из готового файла; им же собирается объединение сборки для
-проверки. **Объединение считать именно сетками, а не примитивами:** цилиндр
-из 192 сегментов и цилиндр сетки из 360 почти совпадают, и булев решатель
-на таких поверхностях выдаёт мусор — проверено 22.09.2026, разность дала
-496 мм³ «наружу» там, где наружу нет ничего. `cyl` — цилиндр радиуса r вдоль axis,
-от t0 до t1 вдоль оси, отсчёт от точки at. `region` — пересечение нескольких
-полупространств одним телом (клин, слой). Операции: INTERSECT, DIFFERENCE
-(ниша), UNION (штифт).
+A part's own `src` overrides the global one: in an assembly of overlapping
+bodies each part is cut from its own. `plane` is the half-space n.x <= d.
+`cyl` is a cylinder of radius r along `axis`, from t0 to t1, measured from
+`at`. `region` is the intersection of several half-spaces as one body - a
+wedge, a slab. `mesh` is a cutter read from a file. Operations: INTERSECT,
+DIFFERENCE (a socket), UNION (a pin).
 
-Ловушки, на которых уже обожглись
----------------------------------
-* Резак должен **высовываться** из детали: ниша, начатая ровно на плоскости
-  реза, даёт булеву решателю совпадающие грани. Начинать на 0.5 мм раньше.
-* Штифт растить не от плоскости, а изнутри детали — по той же причине.
-* Проверка «объединение минус исходник» на кубе даёт весь куб, если исходник
-  не раздуть: все шесть плоскостей совпадают. `check` раздувает сам.
-* Порог пересечения пары 1e-3 мм³ — это кубик 0.1 мм ребром. Меньшее выдаёт
-  сам решатель на совпадающих плоскостях, к посадке деталей отношения не имеет.
-* Зазор вставки задан под печать **плашмя**: лицо к столу, направление
-  выемки вверх, боковые стенки призмы вертикальны. Лицом вертикально —
-  боковая грань выходит лестницей, и 0.15 мм не хватает: проверено сборкой
-  22.09.2026, кольцо пришлось подтачивать наждачкой.
-* У детали, в которую вдавливают вставку, заполнение должно быть
-  решётчатым («Куб», «Сетка», «Гироид»): спираль и концентрика не держат
-  стенку кармана поперёк, и слой рядом с нишей расходится.
+**Compute an assembly's union from meshes, not from rebuilt primitives.** A
+cutter cylinder and a mesh cylinder of different segment counts almost
+coincide, and the boolean solver returns garbage on such surfaces.
 
-Допуски, ориентация и заполнение — references/split-to-parts.md скилла 3mf-paint.
+Traps already paid for
+----------------------
+* **A cutter must stick out of the part.** A socket started exactly on the cut
+  plane gives the solver coincident faces; start it half a millimetre earlier.
+* **Grow a pin from inside the part**, not from the plane, for the same reason.
+* The "union minus original" check returns the whole body unless the original
+  is inflated, because all the planes coincide. `check` inflates it itself.
+* The pairwise intersection threshold is solver noise on coincident planes and
+  has nothing to do with how the parts fit.
+* **The inlay clearance assumes printing flat**: pocket bottom on the bed,
+  extraction direction up, prism side walls vertical. Printed on edge, the side
+  face comes out as a staircase and the clearance is not enough.
+* **A part an inlay is pressed into needs lattice infill** - Cubic, Grid or
+  Gyroid. Spiral and concentric patterns do not hold the pocket wall across,
+  and the layer beside the socket splits.
+
+Tolerances, orientation and infill: references/split-to-parts.md of the
+3mf-paint skill.
 """
 import sys, os, json, subprocess, itertools
 
 BLENDER = "/Applications/Blender.app/Contents/MacOS/Blender"
-CUT_PAIR = 1e-3          # мм³: ниже этого пересечение пары — шум решателя
-LIP_COS  = 0.5           # n·a = 0.5 -> кромка 30°, тоньше линии сопла на 0.7 мм
-LIP_SHARE= 5.0           # % площади с кромкой острее 30°, после которых прилив не годится
-NECK_MIN = 5.0           # мм²: сечение перемычки, ниже которого накладка ломается в руках
-NECK_TIP = 10.0          # % зоны: меньший кусок мельче — это кончик, а не разлом пополам
-                         # (на волне test 3 сечение 2.66 мм² сломалось при вставке)
+CUT_PAIR = 1e-3          # mm3: below this a pairwise intersection is solver noise
+LIP_COS  = 0.5           # n.a = 0.5 -> a 30 degree lip, sub-line-width for 0.7 mm
+LIP_SHARE= 5.0           # % of area with a lip sharper than 30 deg that rules out a boss
+NECK_MIN = 5.0           # mm2: neck cross-section below which an inlay breaks in the hand
+NECK_TIP = 10.0          # % of the zone: a smaller piece than this is a tip, not a break
 
 
-# ======================= часть, работающая внутри Blender =======================
+
+# ======================= the part that runs inside Blender ======================
 
 def _bl():
     import bpy, bmesh
@@ -249,7 +250,7 @@ def run_in_blender(argv):
         do_check(a['src'], a['parts'])
 
 
-# ======================= часть, работающая снаружи =======================
+# ======================= the part that runs outside =======================
 
 def cmd_fit(argv):
     """Плоскости и окружности по границам цвета в разложенной сетке."""
@@ -267,8 +268,8 @@ def cmd_fit(argv):
     size = np.sqrt(0.5 * np.linalg.norm(np.cross(P[:, 1] - P[:, 0], P[:, 2] - P[:, 0]), axis=1))
     print(f'граней {len(F)}, размер подтреугольника {size.min():.3f}..{size.max():.3f} мм')
 
-    # точка границы — между разноцветными гранями, чьи центроиды рядом.
-    # По рёбрам искать нельзя: после explode в сетке T-стыки.
+    # a border point lies between differently coloured faces whose centroids are
+    # close. Edges cannot be used: after explode the mesh carries T-joints.
     t = cKDTree(C)
     k = 8
     dist, nb = t.query(C, k=k + 1)
@@ -359,12 +360,12 @@ def cmd_inlay(argv):
     npz = argv[0]
     fil   = int(opt('--filament', 4, int))
     scale = opt('--scale', 1.0)
-    edge  = opt('--edge', 1.2)       # толщина вставки в самом тонком месте
-    fit   = opt('--fit', 0.20)   # зазор вбок на сторону; 0.20 проверено печатью,
-                                 # 0.30 дало видимые щели
-    dfit  = opt('--depth-fit', 0.05)  # зазор по глубине: он весь уходит в то,
-                                 # насколько накладка утонет ниже поверхности
-    smooth= opt('--smooth', 0.24)    # радиус чистки контура от зубцов кисти
+    edge  = opt('--edge', 1.2)       # inlay thickness at its thinnest point
+    fit   = opt('--fit', 0.20)   # side clearance per side; 0.20 is verified by
+                                 # printing, 0.30 leaves visible gaps
+    dfit  = opt('--depth-fit', 0.05)  # depth clearance: it all goes into how far
+                                 # the inlay sinks below the surface
+    smooth= opt('--smooth', 0.24)    # radius for cleaning brush teeth off the contour
     asm   = None
     if '--assembly' in argv:
         asm = np.array([float(x) for x in argv[argv.index('--assembly') + 1].split(',')])
@@ -383,7 +384,7 @@ def cmd_inlay(argv):
     ar = 0.5 * np.linalg.norm(nrm, axis=1)
     nrm = nrm / np.maximum(np.linalg.norm(nrm, axis=1), 1e-12)[:, None]
 
-    # куски зоны: подтреугольники, склеенные по общим вершинам
+    # pieces of the zone: subtriangles welded by shared vertices
     Vw = P[sel].reshape(-1, 3)
     pr = cKDTree(Vw).query_pairs(1e-6, output_type='ndarray')
     g = coo_matrix((np.ones(len(pr)), (pr[:, 0], pr[:, 1])), shape=(len(Vw),) * 2)
@@ -462,7 +463,7 @@ def cmd_inlay(argv):
         poly = Polygon(shell.exterior.coords,
                        [q.exterior.coords for q in polys[1:] if shell.contains(q)])
         poly = poly.simplify(smooth / 8)
-        # ширина зоны и её перемычка: радиус эрозии, на котором зона распадается
+        # zone width and its neck: the erosion radius at which the zone splits
         dist = ndimage.distance_transform_edt(img) * px
         thick = smax - (ss.min() - edge)
         ridge = (dist >= ndimage.maximum_filter(dist, size=5) - 1e-9) & img
@@ -473,7 +474,7 @@ def cmd_inlay(argv):
             lb, nl = ndimage.label(dist > rr)
             if nl > n0:
                 sz = np.sort(np.bincount(lb.ravel())[1:])[::-1]
-                share = 100.0 * sz[1] / sz.sum()      # доля меньшего куска
+                share = 100.0 * sz[1] / sz.sum()      # share of the smaller piece
                 band = img & (np.abs(dist - rr) < 1.5 * px) & (thick > 0)
                 neck = 2 * rr
                 neck_cs = neck * (thick[band].min() if band.any() else edge)
