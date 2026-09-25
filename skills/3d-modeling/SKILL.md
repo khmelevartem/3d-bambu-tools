@@ -74,13 +74,23 @@ Project scripts live in `tools/`, with dependencies pulled in through
 openscad -o work/part.stl --hardwarnings --summary all --summary-file work/part.json part.scad
 python3 tools/printcheck.py work/part.stl
 openscad -o work/view.png --imgsize=900,700 --autocenter --viewall --camera=0,0,0,60,0,35,0 part.scad
-./tools/slice.sh work/part.stl              # stock profile, WITHOUT supports
-./tools/slice.sh --supports work/part.stl
 open -a BambuStudio work/part.stl
 ```
 
-A `.3mf` project is sliced with **its own profile**, without `--load-settings`,
-so that what gets checked is what will actually print:
+**Slice when the answer depends on it, not as a closing ritual.** The person
+slices in Bambu Studio before printing anyway, so a slice here is not how they
+learn the weight — it is how this skill learns something it would otherwise be
+guessing: whether supports are actually generated, and what a change did to the
+print. Those two, and nothing else:
+
+```bash
+./tools/slice.sh work/part.stl              # stock profile, WITHOUT supports
+./tools/slice.sh --supports work/part.stl
+```
+
+When it is a `.3mf` project being sliced, it goes with **its own profile**,
+without `--load-settings`, so the check is of the file itself and not of
+whatever the presets would impose on it:
 
 ```bash
 "$BS" --outputdir "$PWD/work/out" --slice 1 path/project.3mf
@@ -94,8 +104,13 @@ python3 tools/gcode_report.py work/out/plate_1.gcode
    fits the bed.
 3. The PNG render has been **opened and looked at** from at least one angle —
    half of all geometry errors are visible only that way.
-4. **The file that will be printed** was sliced, not an STL lying next to it.
-5. The last line of `gcode_report.py` is read and carried into the answer.
+4. Does the answer claim anything only a slice knows — supports, grams, hours?
+   If it does, **the file that will be printed** was sliced, not an STL lying
+   next to it, and the last line of `gcode_report.py` was read. If it does not,
+   there is nothing here to slice.
+5. Any number that came from `slice.sh` is named as the CLI's. The person
+   slices in the GUI, with the presets selected there, and that is the number
+   they will print by; presenting the CLI's as final misstates it.
 6. No stray files with other settings are left in `work/out/`, and nothing
    temporary appeared in the model folder.
 7. In Bambu Studio the part appears as a separate object of the expected size.

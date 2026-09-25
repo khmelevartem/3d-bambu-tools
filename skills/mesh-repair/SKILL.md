@@ -215,13 +215,19 @@ usual install line.
 ## Checking the result
 
 1. `meshdoctor`: verdict CLEAN, and as many bodies as intended.
-2. `BambuStudio --info`: `manifold = yes`, no `open_edges` line.
-3. Volume compared with the original. Off by more than a percent, find out why:
+2. Volume compared with the original. Off by more than a percent, find out why:
    closing holes adds body, recomputing normals fixes the sign, welding pulls
    the surface in. If none of those explains it, the repair damaged the shape.
-4. Bounding box: tens of microns after a rebuild is normal, tenths of a
+3. Bounding box: tens of microns after a rebuild is normal, tenths of a
    millimetre are not.
-5. Slice it and read `gcode_report.py` — see the **3d-modeling** skill.
+4. `BambuStudio --info`: `manifold = yes`, no `open_edges` line — a second
+   opinion from the slicer's own parser, where `meshdoctor` reads the file's
+   indices. Costs nothing, and is skipped where Bambu Studio is not installed.
+
+**Do not close a repair with a slice.** It answers none of the questions above:
+a green CLI run does not prove the file opens in the GUI, and the weight is the
+person's to read in their own slicer. Slice only when the answer being written
+claims something about supports or about the print itself.
 
 ## Reference material
 

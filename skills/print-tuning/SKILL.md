@@ -48,6 +48,12 @@ Step 0 applies only when the file came from a person who saved it in the GUI.
 **Decide by two slices, before and after. A rule is never enough on its own** —
 several of the rules below contradict common FDM wisdom.
 
+Slicing here is the instrument, not a report. Its absolute numbers are the
+CLI's: the person prints from the GUI, with the presets selected there, and
+those figures differ. **The difference between two CLI slices does not** — both
+carry the same offset, and it cancels. So compare, and quote a single number as
+the CLI's rather than as what they will see.
+
 ## Reading the audit
 
 `audit` reports three levels. A **BLOCKER** means the file will not print as it

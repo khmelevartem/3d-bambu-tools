@@ -124,9 +124,9 @@ painting and splitting models that will be printed elsewhere, or not at all.
 `balljoint.py`), geometry checks (`printcheck.py`, `figcheck.py`), the whole
 paint side (`paint.py`, `paint_split.py`, `paint_despeckle.py`,
 `paint_transfer.py`, `paintview.py`) and comparison against a picture
-(`refcompare.py`). Of the skills, **3mf-paint** and **model-vs-reference**
-apply in full, **mesh-repair** does except for the last item of its hand-over
-check, which is a slice, and most of **3d-modeling** does.
+(`refcompare.py`). Of the skills, **3mf-paint**, **mesh-repair** and
+**model-vs-reference** apply in full, and most of **3d-modeling** does: none of
+them closes with a slice, which happens only where the answer turns on it.
 
 Blender is a separate requirement and an unrelated one: `meshfix.py`,
 `solid_cut.py` and `pivot_joint.py` drive it headlessly whether or not a slicer
