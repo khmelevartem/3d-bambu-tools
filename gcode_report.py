@@ -4,9 +4,9 @@ went where, and whether the print has supports.
 
 Why a separate script. The weight and time slice.sh prints are totals for
 the whole print, and they hide the thing that matters most: whether
-supports are on. That has already cost one warped part (2026-09-12, a rail
-switch: 32 g without supports instead of 36 g with them). What is counted
-here is what the G-code actually contains, not what the profile says.
+supports are on. The difference is a few grams, easy to read as noise and
+easy to discover as a warped part. What is counted here is what the G-code
+actually contains, not what the profile says.
 
     python3 tools/gcode_report.py out/plate_1.gcode
 

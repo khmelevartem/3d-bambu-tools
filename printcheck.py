@@ -77,11 +77,10 @@ def main(path):
 
     # Shell count: faces are unioned across edges that have exactly two
     # faces. Without it the genus cannot be computed. The formula (2-chi)/2
-    # holds ONLY for a single shell; on a part made of several it lies and
-    # returns negative values. Verified 2026-09-19 on bodies of known
-    # topology: two spheres gave -1 instead of 0, a sphere plus a torus
-    # 0 instead of 1, three tori 1 instead of 3, a piece of train track -6.
-    # Correct: genus = (2*shells - chi) / 2.
+    # holds ONLY for a single shell; on a part made of several it lies, and
+    # on bodies of known topology it returns nonsense: two spheres come out
+    # at -1 instead of 0, a sphere plus a torus at 0 instead of 1, three
+    # tori at 1 instead of 3. Correct: genus = (2*shells - chi) / 2.
     par=list(range(F))
     def find(x):
         r=x

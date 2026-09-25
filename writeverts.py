@@ -16,10 +16,10 @@ Three arrays in the npz:
 Lines of untouched vertices are carried over verbatim; the order of archive
 entries and the compression method are kept, so the diff stays where geometry moved.
 
-Verified 2026-09-19 on a triple rail junction (4926 vertices, 9852 faces):
-with moved=False the XML comes out byte-identical to the source; with
-moved=True on every vertex the coordinates match exactly (0 mm), and a 1 mm
-shift reproduces to 2.8e-14 mm; face order and archive contents never change.
+What the script guarantees: with `moved` all false the XML comes out
+byte-identical to the source; with it all true the coordinates are written
+back exactly, and a shift reproduces to within float printing error. Face
+order and the rest of the archive never change either way.
 
 `<vertex .../>` is parsed by regex against the format Bambu Studio writes.
 If the number of vertices found does not match the npz, the script dies on
