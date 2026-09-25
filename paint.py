@@ -500,17 +500,26 @@ def cmd_filament(a):
     from collections import Counter
     print('расширено ключей по записей-на-филамент:', dict(Counter(grown)))
 
-    M = [int(x) for x in cfg['flush_volumes_matrix']]
-    new = [[M[i * n + j] for j in range(n)] for i in range(n)]
-    for i in range(n): new[i].append(new[i][SRC])
-    new.append([new[SRC][j] for j in range(n)] + [0])
-    cfg['flush_volumes_matrix'] = [str(x) for row in new for x in row]
+    # The flush matrix is per colour PAIR, N x N, so it grows separately. It is
+    # in no preset: the GUI computes it from the filament colours and writes it
+    # into the project. A project may legitimately carry none - one assembled in
+    # code, for one - and then it stays absent: a matrix invented here would pin
+    # flush volumes the slicer would otherwise compute, and too small a flush
+    # shows as the previous colour bleeding into the new one.
+    if 'flush_volumes_matrix' in cfg:
+        M = [int(x) for x in cfg['flush_volumes_matrix']]
+        new = [[M[i * n + j] for j in range(n)] for i in range(n)]
+        for i in range(n): new[i].append(new[i][SRC])
+        new.append([new[SRC][j] for j in range(n)] + [0])
+        cfg['flush_volumes_matrix'] = [str(x) for row in new for x in row]
+        assert len(cfg['flush_volumes_matrix']) == (n + 1) ** 2
+    else:
+        print('матрицы промывки в проекте нет — оставлена слайсеру')
 
     left = [(k, len(v)) for k, v in cfg.items() if isinstance(v, list) and v
             and k not in DENY and not k.startswith(DENY_PREFIX)
             and len(v) % n == 0 and len(v) % (n + 1)]
     assert not left, f'остались списки старой длины: {left}'
-    assert len(cfg['flush_volumes_matrix']) == (n + 1) ** 2
 
     ms = zin.read('Metadata/model_settings.config').decode('utf-8')
     for key, add in (('filament_maps', '1'), ('filament_volume_maps', '0')):

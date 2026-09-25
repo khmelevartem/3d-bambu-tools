@@ -28,6 +28,11 @@ an assert — there will be no silently mangled file.
 import re, shutil, sys, zipfile
 import numpy as np
 
+if {'-h', '--help'} & set(sys.argv[1:]):
+    print(__doc__); sys.exit(0)
+if len(sys.argv) != 4:
+    sys.exit(__doc__)
+
 src, npz, dst = sys.argv[1], sys.argv[2], sys.argv[3]
 d = np.load(npz, allow_pickle=True)
 V, moved = d['V'], d['moved']

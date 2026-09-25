@@ -19,7 +19,9 @@ geometry and must be asked for explicitly.**
 """
 import sys, os, subprocess, json
 
-BLENDER = "/Applications/Blender.app/Contents/MacOS/Blender"
+# The macOS bundle by default; BLENDER=/path/to/blender picks another one.
+BLENDER = os.environ.get("BLENDER",
+                         "/Applications/Blender.app/Contents/MacOS/Blender")
 
 STEPS = {
     "--weld":      "склеить вершины ближе допуска (по умолчанию 1e-4 мм)",

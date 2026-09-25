@@ -65,7 +65,9 @@ Tolerances, orientation and infill: references/split-to-parts.md of the
 """
 import sys, os, json, subprocess, itertools
 
-BLENDER = "/Applications/Blender.app/Contents/MacOS/Blender"
+# The macOS bundle by default; BLENDER=/path/to/blender picks another one.
+BLENDER = os.environ.get("BLENDER",
+                         "/Applications/Blender.app/Contents/MacOS/Blender")
 CUT_PAIR = 1e-3          # mm3: below this a pairwise intersection is solver noise
 LIP_COS  = 0.5           # n.a = 0.5 -> a 30 degree lip, sub-line-width for 0.7 mm
 LIP_SHARE= 5.0           # % of area with a lip sharper than 30 deg that rules out a boss

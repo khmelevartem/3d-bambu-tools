@@ -10,6 +10,11 @@ preview, plate layout. That is how EXACTLY one change gets tested at a time.
 """
 import json, sys, zipfile
 
+if {'-h', '--help'} & set(sys.argv[1:]):
+    print(__doc__); sys.exit(0)
+if len(sys.argv) < 4:
+    sys.exit(__doc__)
+
 src, dst = sys.argv[1], sys.argv[2]
 args = sys.argv[3:]
 drop = None

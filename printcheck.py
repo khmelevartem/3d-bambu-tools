@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Check an STL for FDM printability. No dependencies, stdlib only.
 
+    python3 tools/printcheck.py part.stl [more.stl ...]
+
 WARNING: vertices are merged by exact coordinate match. On large imported
 meshes (hundreds of thousands of faces, float32 coordinates) that produces
 FALSE positives for watertightness and for the genus of the surface. For
@@ -118,4 +120,8 @@ def main(path):
     print(f"    слоёв по {LAYER} мм: {math.ceil(size[2]/LAYER)}")
 
 if __name__ == "__main__":
+    if {"-h", "--help"} & set(sys.argv[1:]):
+        print(__doc__); sys.exit(0)
+    if len(sys.argv) < 2:
+        sys.exit(__doc__)
     for p in sys.argv[1:]: main(p); print()

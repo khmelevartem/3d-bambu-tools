@@ -76,6 +76,8 @@ def seconds_by_feature(gcode):
 
 
 def main():
+    if {'-h', '--help'} & set(sys.argv[1:]):
+        print(__doc__); sys.exit(0)
     if len(sys.argv) != 2:
         sys.exit(__doc__)
     gcode = pathlib.Path(sys.argv[1])

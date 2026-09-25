@@ -44,7 +44,9 @@ Runs through Blender headless, like meshfix.py, with the exact boolean solver.
 """
 import json, os, subprocess, sys
 
-BLENDER = "/Applications/Blender.app/Contents/MacOS/Blender"
+# The macOS bundle by default; BLENDER=/path/to/blender picks another one.
+BLENDER = os.environ.get("BLENDER",
+                         "/Applications/Blender.app/Contents/MacOS/Blender")
 
 
 # ======================= the part that runs inside Blender ======================
@@ -364,6 +366,8 @@ def run_in_blender(argv):
 # ============================ invocation outside Blender ============================
 
 def main():
+    if {'-h', '--help'} & set(sys.argv[1:]):
+        print(__doc__); return 0
     if len(sys.argv) < 2:
         print(__doc__); return 1
     spec = json.load(open(sys.argv[1], encoding='utf-8'))

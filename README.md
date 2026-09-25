@@ -90,11 +90,19 @@ uv run --quiet --with numpy --with scipy --with trimesh python tools/paint.py �
 | `trimesh` | `balljoint.py`, `figcheck.py`, `make_multicolor_3mf.py` |
 | `shapely`, `scikit-image` | `solid_cut.py`, `meshsolid.py` |
 | `Pillow` | `refcompare.py` |
-| Blender as a module (`bpy`) | `meshfix.py`, `pivot_joint.py`, `solid_cut.py` |
+| Blender installed as an application | `meshfix.py`, `pivot_joint.py`, `solid_cut.py` |
 | Bambu Studio installed | `slice.sh`, `resolve_profile.py`, `figopt.py` |
 
-`slice.sh` expects the macOS app bundle at
-`/Applications/BambuStudio.app`; on Linux point `BS` at your binary.
+Blender is needed as an **installed application**, not as the `bpy` package:
+those three scripts relaunch themselves inside it headlessly. Both it and Bambu
+Studio default to the macOS bundle and are overridden by environment variable:
+
+```bash
+BS=/usr/bin/bambu-studio BLENDER=/usr/bin/blender python3 tools/meshfix.py …
+```
+
+`resolve_profile.py` reads the presets straight out of the Bambu Studio bundle
+and has no such override — outside macOS, edit `ROOT` in it.
 
 ## The tools
 

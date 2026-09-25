@@ -31,12 +31,15 @@
 
 set -euo pipefail
 
-BS="/Applications/BambuStudio.app/Contents/MacOS/BambuStudio"
+# The macOS bundle by default; BS=/path/to/binary picks another one.
+BS="${BS:-/Applications/BambuStudio.app/Contents/MacOS/BambuStudio}"
 HERE="$(cd "$(dirname "$0")" && pwd)"
 PROF="$HERE/profiles"
 SUPPORTS=0
 if [ "${1:-}" = "--supports" ]; then SUPPORTS=1; shift; fi
 [ $# -eq 1 ] || { sed -n '19,31p' "$0"; exit 2; }
+[ -x "$BS" ] || { echo "Bambu Studio не найден: $BS" >&2
+                  echo "путь задаётся переменной BS перед командой" >&2; exit 2; }
 
 MODEL="$(cd "$(dirname "$1")" && pwd)/$(basename "$1")"
 OUT="$(dirname "$HERE")/work/out"
