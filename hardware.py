@@ -13,12 +13,14 @@ figcheck and slice.sh all start measuring by it.
     hardware.profile()       # {'machine': ..., 'process': ..., 'filament': ...}
 
 One-off override, without editing the file:  A1_NOZZLE=0.2 python3 …
+Another config entirely — a test run, a second machine:  A1_HARDWARE=/path/to.json
 
 Stdlib only: printcheck.py and meshdoctor.py run on the system python3.
 """
 import json, os, pathlib
 
-PATH = pathlib.Path(__file__).resolve().parent.parent / "hardware.json"
+PATH = pathlib.Path(os.environ["A1_HARDWARE"]) if os.environ.get("A1_HARDWARE") \
+    else pathlib.Path(__file__).resolve().parent.parent / "hardware.json"
 
 
 def load():

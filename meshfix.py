@@ -229,7 +229,7 @@ def main():
         k = argv.index("--put")
         return put_3mf(src, argv[k + 1], argv[k + 2], out)
     if src.lower().endswith(".3mf") or "--extract" in argv:
-        return extract_3mf(src)
+        return extract_3mf(src, out)
 
     explicit = [k for k in STEPS if k in argv]
     args = {
@@ -300,11 +300,19 @@ def main():
     return 0
 
 
-def extract_3mf(path):
+def extract_3mf(path, out=None):
     """Extract the meshes of a 3MF into separate STLs — to repair and to look at.
-        They are NOT put back into the project this way: see skills/mesh-repair."""
+
+    `out` is where they go: a directory, or a name the object number is appended
+    to. Without it they land beside the source. They are NOT put back into the
+    project this way: see skills/mesh-repair."""
     import zipfile, xml.etree.ElementTree as ET, struct
-    base = os.path.splitext(path)[0]
+    if out and os.path.isdir(out):
+        base = os.path.join(out, os.path.basename(os.path.splitext(path)[0]))
+    elif out:
+        base = os.path.splitext(out)[0]
+    else:
+        base = os.path.splitext(path)[0]
     made, painted = [], 0
     with zipfile.ZipFile(path) as z:
         for name in sorted(n for n in z.namelist() if n.lower().endswith(".model")):

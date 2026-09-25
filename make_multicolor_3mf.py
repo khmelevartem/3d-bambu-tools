@@ -317,16 +317,18 @@ def build_project_settings(filaments, printer: str, process: str) -> bytes:
         # This machine has one extruder, so it is ones everywhere.
         "filament_map": ["1"] * n,
         "filament_map_mode": "Auto For Flush",
+        # Without it the CLI picks a cold plate type and heats the bed far below
+        # what the plate in hardware.json actually needs.
+        "curr_bed_type": hardware.plate(),
     })
     # A flattened profile is a dump of a PRESET and still carries keys that
     # must not appear in a project config: "type", "include", "description",
     # "is_custom_defined". Bambu Studio validates config types, so they are
     # removed here. Note that removing them is necessary, not sufficient:
     # the GUI still will not open such a file. Why is in the 3d-modeling
-    # skill, references/bambu-cli.md.
     # skill, references/bambu-cli.md. A useful check is against what Bambu
-    # Studio itself writes for the same model - hence the --export-3mf
-    # comparison: run a file through --export-3mf and diff the key sets.
+    # Studio itself writes for the same model: run a file through --export-3mf
+    # and diff the key sets.
     for key in ("type", "include", "description", "is_custom_defined",
                 "compatible_printers", "compatible_printers_condition",
                 "instantiation", "setting_id", "inherits"):

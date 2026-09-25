@@ -77,7 +77,11 @@ def main():
         sys.exit(f"{a.src}: нет {CFG} — это файл без настроек, его сперва должен "
                  f"открыть и сохранить человек, иначе переносить не во что")
     mine = json.loads(zin.read(CFG).decode("utf-8"))
-    ref = json.loads(zipfile.ZipFile(a.ref).read(CFG).decode("utf-8"))
+    zref = zipfile.ZipFile(a.ref)
+    if CFG not in zref.namelist():
+        sys.exit(f"{a.ref}: нет {CFG} — эталон тоже должен быть сохранён "
+                 f"интерфейсом, иначе переносить нечего")
+    ref = json.loads(zref.read(CFG).decode("utf-8"))
 
     # The keys the human edited by hand — the GUI listed them itself.
     hands = {k for part in mine.get("different_settings_to_system", [])
@@ -112,8 +116,8 @@ def main():
                        "sparse_infill_density", "support_style", "wall_generator",
                        "support_top_z_distance", "filament_settings_id", "enable_support"):
                 print(f"  {key:30} {str(old)[:38]:38} -> {str(new)[:38]}")
-        print(f"\nсписок правок оставлен авторский: "
-              f"{mine['different_settings_to_system'][0] or '(пуст)'}")
+        own = mine.get("different_settings_to_system") or [""]
+        print(f"\nсписок правок оставлен авторский: {own[0] or '(пуст)'}")
         print("  интерфейс применит системный пресет плюс ЭТИ ключи; остальное "
               "человек ставит руками")
         if hands:

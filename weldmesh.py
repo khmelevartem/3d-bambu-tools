@@ -12,9 +12,10 @@ the order of existing faces does not change at all - only vertex indices are
 rewritten. Patches for the remaining holes are appended at the END of the list
 and inherit the colour of the neighbouring face across the edge.
 
-    python3 tools/weldmesh.py in.3mf out.3mf
-    python3 tools/weldmesh.py in.3mf out.3mf --round 5   # coarser welding
-    python3 tools/weldmesh.py in.3mf out.3mf --no-fill   # weld only
+    UV="uv run --quiet --with numpy --with scipy python"
+    $UV tools/weldmesh.py in.3mf out.3mf
+    $UV tools/weldmesh.py in.3mf out.3mf --round 5       # coarser welding
+    $UV tools/weldmesh.py in.3mf out.3mf --no-fill       # weld only, no scipy
 
 Welding goes by exact coordinate match, rounded to `--round` decimals in file
 units. Do not go coarser than 6: looser rounding starts producing degenerate

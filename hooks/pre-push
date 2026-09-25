@@ -1,0 +1,24 @@
+#!/bin/sh
+# Run the regression suite before a push. Install it with:
+#
+#     git config core.hooksPath hooks
+#
+# A missing Bambu Studio or Blender is a skip, not a failure, so the hook
+# works on a machine with neither. To push past a red suite — a work in
+# progress on a branch, a fix for the test itself — set SKIP_REGRESS=1.
+set -e
+
+if [ -n "${SKIP_REGRESS:-}" ]; then
+    echo "pre-push: регресс пропущен (SKIP_REGRESS)"
+    exit 0
+fi
+
+ROOT="$(git rev-parse --show-toplevel)"
+echo "pre-push: регресс $ROOT/tests"
+if python3 "$ROOT/tests/run.py"; then
+    exit 0
+fi
+echo
+echo "pre-push: регресс красный — push остановлен."
+echo "Починить, либо SKIP_REGRESS=1 git push, если тест и есть то, что чинится."
+exit 1

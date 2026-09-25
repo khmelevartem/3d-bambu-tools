@@ -18,12 +18,18 @@ import json, math, os, re, sys, zipfile
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import hardware
 
+CFG = "Metadata/project_settings.config"
+
 BLOCK, WARN, HINT, OK = "БЛОКЕР", "ВАЖНО", "СОВЕТ", "ок"
 
 
 def cfg_of(path):
     with zipfile.ZipFile(path) as z:
-        return json.loads(z.read("Metadata/project_settings.config"))
+        if CFG not in z.namelist():
+            sys.exit(f"{path}: нет {CFG}: файл собран с --no-project или экспортирован\n"
+                     "без настроек. Они появляются, когда файл открыт и сохранён\n"
+                     "в Bambu Studio; перенести их туда потом — retune_project.py")
+        return json.loads(z.read(CFG))
 
 
 def one(v):

@@ -37,7 +37,7 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 PROF="$HERE/profiles"
 SUPPORTS=0
 if [ "${1:-}" = "--supports" ]; then SUPPORTS=1; shift; fi
-[ $# -eq 1 ] || { sed -n '19,31p' "$0"; exit 2; }
+[ $# -eq 1 ] || { sed -n '16,29p' "$0"; exit 2; }
 [ -x "$BS" ] || { echo "Bambu Studio не найден: $BS" >&2
                   echo "путь задаётся переменной BS перед командой" >&2; exit 2; }
 

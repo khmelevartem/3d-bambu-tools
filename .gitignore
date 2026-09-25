@@ -10,3 +10,7 @@ hardware.json
 
 # macOS
 .DS_Store
+
+# Regression fixtures and scratch: built by tests/fixtures.py, disposable.
+tests/.fixtures/
+tests/.work/

@@ -12,9 +12,10 @@ The fix: a face carrying a foreign vertex on its edge is split into a fan from
 its own centroid. The centroid lies IN THE PLANE of the face, so the shape does
 not change at all, and the children inherit the parent's `paint_color`.
 
-    python3 tools/fixtjoints.py in.3mf out.3mf
-    python3 tools/fixtjoints.py in.3mf --dry          # diagnosis only
-    python3 tools/fixtjoints.py in.3mf out.3mf --tol 0.005
+    UV="uv run --quiet --with numpy --with scipy python"
+    $UV tools/fixtjoints.py in.3mf out.3mf
+    $UV tools/fixtjoints.py in.3mf --dry              # diagnosis only
+    $UV tools/fixtjoints.py in.3mf out.3mf --tol 0.005
 
 Against the neighbouring tools:
 
