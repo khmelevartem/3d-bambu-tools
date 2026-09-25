@@ -482,7 +482,12 @@ DENY = {'printable_area', 'bed_exclude_area', 'print_compatible_printers', 'nozz
 
 def cmd_filament(a):
     zin = zipfile.ZipFile(a.src)
-    cfg = json.loads(zin.read('Metadata/project_settings.config'))
+    cfgname = 'Metadata/project_settings.config'
+    if cfgname not in zin.namelist():
+        sys.exit(f'{a.src}: нет {cfgname}: файл собран с --no-project или\n'
+                 'экспортирован без настроек. Они появляются, когда файл открыт\n'
+                 'и сохранён в Bambu Studio; перенести потом — retune_project.py')
+    cfg = json.loads(zin.read(cfgname))
     n = len(cfg['filament_colour'])
     SRC = min(1, n - 1)                              # which filament to copy from
     grown = []

@@ -10,6 +10,8 @@ preview, plate layout. That is how EXACTLY one change gets tested at a time.
 """
 import json, sys, zipfile
 
+CFG = 'Metadata/project_settings.config'
+
 if {'-h', '--help'} & set(sys.argv[1:]):
     print(__doc__); sys.exit(0)
 if len(sys.argv) < 4:
@@ -30,7 +32,11 @@ with zipfile.ZipFile(src) as z:
     items = z.infolist()
     data = {it.filename: z.read(it.filename) for it in items}
 
-cfg = json.loads(data['Metadata/project_settings.config'])
+if CFG not in data:
+    sys.exit(f'{src}: нет {CFG}: файл собран с --no-project или экспортирован\n'
+             'без настроек. Они появляются, когда файл открыт и сохранён\n'
+             'в Bambu Studio; перенести их туда потом — retune_project.py')
+cfg = json.loads(data[CFG])
 n = len(cfg['filament_colour'])
 if drop is not None:
     d = drop - 1
@@ -51,7 +57,7 @@ for k, v in kv.items():
     cfg[k] = json.loads(v) if v[:1] in '[{' else v
     print(f'  {k}: {old!r} -> {cfg[k]!r}')
 
-data['Metadata/project_settings.config'] = json.dumps(cfg, indent=4, ensure_ascii=True,
+data[CFG] = json.dumps(cfg, indent=4, ensure_ascii=True,
                                                       sort_keys=True).encode('utf-8')
 with zipfile.ZipFile(dst, 'w', zipfile.ZIP_DEFLATED) as zo:
     for it in items:
