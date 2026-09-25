@@ -556,3 +556,36 @@ def _():
     # (плоскость прошла бы мимо) или 8*20*4 — любое, но не 160.
     close(num(out, r"низ\s+([\d.]+) мм³"), 160.0, 0.5, "объём отрезанного низа")
     contains(out, "открытых рёбер 0", "non-manifold 0")
+
+
+@case("partedit:новый объект не занимает уже занятый id", tools=("partedit.py",))
+def _():
+    # Идентификаторы выдавались от 100 всегда. Проект, который уже правили,
+    # держит id в сотнях — новый объект получал занятый номер, и слайсер
+    # показывал на его месте чужую деталь, ничего не сообщая.
+    d = work("partedit_ид")
+    src = painted("ball")
+    job = d / "j1.json"
+    job.write_text(json.dumps(
+        {"src": str(src), "dst": str(d / "one.3mf"),
+         "ops": [{"op": "object", "name": "Первый", "extruder": 3, "plate": 1,
+                  "pos": [128, 128, 0],
+                  "mesh": {"kind": "box", "lo": [0, 0, 0], "hi": [4, 4, 4]}}]},
+        ensure_ascii=False))
+    run([TOOLS / "partedit.py", "apply", job], deps=("numpy",))
+    job2 = d / "j2.json"
+    job2.write_text(json.dumps(
+        {"src": str(d / "one.3mf"), "dst": str(d / "two.3mf"),
+         "ops": [{"op": "object", "name": "Второй", "extruder": 4, "plate": 1,
+                  "pos": [160, 128, 0],
+                  "mesh": {"kind": "box", "lo": [0, 0, 0], "hi": [6, 6, 6]}}]},
+        ensure_ascii=False))
+    run([TOOLS / "partedit.py", "apply", job2], deps=("numpy",))
+    out = run([TOOLS / "partedit.py", "list", d / "two.3mf"], deps=("numpy",))
+    contains(out, "Первый (филамент 3)", "Второй (филамент 4)")
+    import re as _re, zipfile as _zip, collections as _c
+    z = _zip.ZipFile(d / "two.3mf")
+    for entry in ("3D/3dmodel.model", "Metadata/model_settings.config"):
+        ids = _re.findall(r'<object id="(\d+)"', z.read(entry).decode())
+        dup = [k for k, v in _c.Counter(ids).items() if v > 1]
+        assert not dup, f"{entry}: повторённые id объектов {dup}"

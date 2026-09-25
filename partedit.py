@@ -161,7 +161,14 @@ class Project:
         self.files = {n: self.z.read(n) for n in self.z.namelist()}
         self.top = self.files['3D/3dmodel.model'].decode()
         self.cfg = self.files['Metadata/model_settings.config'].decode()
-        self.next_id = 100
+        # Ids must continue above everything the project already uses: a project
+        # edited before may well hold ids in the hundreds, and a repeated id is
+        # not rejected — Bambu Studio then shows one object in place of another.
+        used = [int(x) for x in re.findall(r'<object id="(\d+)"', self.top)]
+        used += [int(x) for x in re.findall(r'<object id="(\d+)"', self.cfg)]
+        used += [int(x) for x in re.findall(r'<part id="(\d+)"', self.cfg)]
+        used += [int(x) for x in re.findall(r'objectid="(\d+)"', self.top)]
+        self.next_id = max(used, default=99) + 1
 
     # --- reading ---
     def object_id(self, name):
