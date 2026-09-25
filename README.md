@@ -57,12 +57,18 @@ $EDITOR hardware.json
 python3 tools/hardware.py     # prints what it resolved
 ```
 
-To let an agent use the skills, link them into `.claude/skills/`:
+To let an agent use the skills, link them into `.claude/skills/`, and put the
+rules where an agent looks for them — the project root, not inside `tools/`:
 
 ```bash
 mkdir -p .claude/skills
 for s in tools/skills/*/; do ln -s "../../$s" ".claude/skills/$(basename $s)"; done
+ln -s tools/AGENTS.md AGENTS.md
 ```
+
+Both links point into `tools/`, so a `git pull` there updates the rules and the
+skills in place. If the project already has its own `AGENTS.md` or `CLAUDE.md`,
+keep it and refer to `tools/AGENTS.md` from it instead of replacing it.
 
 `hardware.json` is the single source for nozzle diameter, layer height, line
 width and preset names. No script keeps those as constants: change the nozzle in

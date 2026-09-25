@@ -1,8 +1,10 @@
-# Working in this repository
+# Working in a 3D-print project
 
-This is the `tools/` directory of a 3D-print project: command-line tools for
-Bambu Studio 3MF files, plus the skills that say how to use them. It is meant
-to be driven by an AI agent working alongside the person who owns the printer.
+These are the rules of `tools/`: command-line tools for Bambu Studio 3MF files,
+plus the skills that say how to use them. They are meant to be driven by an AI
+agent working alongside the person who owns the printer. The file lives in
+`tools/AGENTS.md` and is usually read through a link at the project root, so
+paths below are written from that root.
 
 ## Layout contract
 

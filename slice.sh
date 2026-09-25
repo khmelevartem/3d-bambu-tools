@@ -46,6 +46,10 @@ OUT="$(dirname "$HERE")/work/out"
 
 # The machine comes from hardware.json. The flattened-profile cache is tagged by
 # nozzle, or the script would silently slice with the previous nozzle's profile.
+# The nozzle alone is not enough: change the printer, the process or the filament
+# in hardware.json and the tag does not move, so the cache is also rebuilt when
+# the preset name inside it stops matching the one being asked for. Without that
+# the numbers stay plausible while belonging to the previous preset.
 NZ="$(python3 "$HERE/hardware.py" nozzle_key)"
 MACHINE_ID="$(python3 "$HERE/hardware.py" machine)"
 PROCESS_ID="$(python3 "$HERE/hardware.py" process)"
@@ -53,9 +57,13 @@ FILAMENT_ID="$(python3 "$HERE/hardware.py" filament)"
 echo "сопло $NZ: $MACHINE_ID / $PROCESS_ID / $FILAMENT_ID"
 
 mkdir -p "$PROF" "$OUT"
-[ -f "$PROF/machine-$NZ.json" ]  || python3 "$HERE/resolve_profile.py" "$MACHINE_ID"  "$PROF/machine-$NZ.json"
-[ -f "$PROF/process-$NZ.json" ]  || python3 "$HERE/resolve_profile.py" "$PROCESS_ID"  "$PROF/process-$NZ.json"
-[ -f "$PROF/filament-$NZ.json" ] || python3 "$HERE/resolve_profile.py" "$FILAMENT_ID" "$PROF/filament-$NZ.json"
+cached() {   # cached <file> <preset name>: is this the flattened profile of it?
+    [ -f "$1" ] && [ "$(python3 -c 'import json,sys
+print(json.load(open(sys.argv[1])).get("name", ""))' "$1" 2>/dev/null)" = "$2" ]
+}
+cached "$PROF/machine-$NZ.json"  "$MACHINE_ID"  || python3 "$HERE/resolve_profile.py" "$MACHINE_ID"  "$PROF/machine-$NZ.json"
+cached "$PROF/process-$NZ.json"  "$PROCESS_ID"  || python3 "$HERE/resolve_profile.py" "$PROCESS_ID"  "$PROF/process-$NZ.json"
+cached "$PROF/filament-$NZ.json" "$FILAMENT_ID" || python3 "$HERE/resolve_profile.py" "$FILAMENT_ID" "$PROF/filament-$NZ.json"
 
 # Process: the stock one, or its copy with supports. Both send curr_bed_type:
 # without it the CLI selects a cold plate type and the bed heats far below what
