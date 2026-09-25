@@ -28,12 +28,13 @@ SPLIT = -1
 
 
 def point_tri_dist2(P, A, B, C):
-    """Квадрат расстояния от точек P до треугольников (A,B,C), по строкам.
+    """Squared distance from points P to triangles (A,B,C), row-wise.
 
-    Честное расстояние до треугольника, а не до его центра: иначе на крупных
-    гранях (механика, плоские панели) цвет уезжает на соседнюю деталь.
-    Алгоритм Эриксона: разбор по областям Вороного вершин, рёбер и плоскости.
-    """
+        The honest distance to the triangle, not to its centre: on large faces
+        (mechanical parts, flat panels) colour otherwise drifts onto the
+        neighbouring feature. Ericson's algorithm: a case split over the Voronoi
+        regions of the vertices, the edges and the plane.
+"""
     AB, AC, AP = B - A, C - A, P - A
     d1 = np.einsum('ij,ij->i', AB, AP)
     d2 = np.einsum('ij,ij->i', AC, AP)

@@ -31,7 +31,7 @@ VERT_RE = re.compile(r'<vertex x="([-\d.eE+]+)" y="([-\d.eE+]+)" z="([-\d.eE+]+)
 
 
 def mesh_members(zf):
-    """Файлы .model с геометрией: 3dmodel.model обычно только оболочка."""
+    """.model files that carry geometry: 3dmodel.model is usually only the shell."""
     out = [n for n in zf.namelist() if n.endswith('.model') and 'Objects/' in n]
     return out or [n for n in zf.namelist() if n.endswith('.model')]
 

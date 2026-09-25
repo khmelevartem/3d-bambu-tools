@@ -27,7 +27,7 @@ def cfg_of(path):
 
 
 def one(v):
-    """Значение может быть списком по филаментам — берём первое."""
+    """A value may be a list per filament — take the first."""
     return v[0] if isinstance(v, list) and v else v
 
 
@@ -159,13 +159,14 @@ def _wrap(s, n):
 # ---------------------------------------------------------------- colour
 
 def _mesh_on_plate(path):
-    """Вершины, грани и филамент на грань — в миллиметрах стола.
+    """Vertices, faces and filament per face, in bed millimetres.
 
-    Сетка в 3MF лежит в своих единицах: в миллиметры её переводит матрица
-    из <build><item transform=…> через цепочку <components>. Без неё врёт
-    и габарит, и — что важнее — ось z, потому что фигурка часто записана
-    лежащей, а на ноги её ставит именно эта матрица.
-    """
+        A mesh in a 3MF lies in its own units; the matrix in
+        <build><item transform=...>, through the <components> chain, converts it to
+        millimetres. Without it both the bounding box and — more importantly — the
+        z axis are wrong, because a figure is often stored lying down and it is that
+        matrix which stands it on its feet.
+"""
     import numpy as np
     import paint
     z = zipfile.ZipFile(path)
@@ -192,7 +193,7 @@ def _mesh_on_plate(path):
 
 
 def _tilt(W, rx, ry):
-    """Наклон вокруг центра детали, потом обратно на стол (z-min = 0)."""
+    """Tilt about the part's centre, then back onto the bed (z-min = 0)."""
     import numpy as np
     c = (W.max(0) + W.min(0)) / 2
     P = W - c
@@ -213,7 +214,7 @@ def _tilt(W, rx, ry):
 
 
 def _changes(W, F, lab, nfil, LH, H1):
-    """Сколько смен филамента даст такая поза: по слоям, без нарезки."""
+    """How many filament changes this pose gives: by layers, without slicing."""
     import numpy as np
     zt = W[F][:, :, 2]
     lo, hi = zt.min(1), zt.max(1)
@@ -237,7 +238,7 @@ def _changes(W, F, lab, nfil, LH, H1):
 
 
 def tilt_sweep(path, lo=-45, hi=45, step=5):
-    """Меняет ли наклон число смен филамента. Считается по сетке, нарезка не нужна."""
+    """Whether a tilt changes the number of filament changes. From the mesh; no slicing needed."""
     import numpy as np
     c = cfg_of(path)
     nfil = len(c.get("filament_colour") or [])

@@ -103,7 +103,7 @@ def _rot_to(axis):
 
 
 def _halfspace(n, d, size=400.0):
-    """Тело, занимающее n·x ≤ d."""
+    """The body occupying n*x <= d."""
     bpy, _, Vector, Matrix = _bl()
     bpy.ops.mesh.primitive_cube_add(size=size)
     o = bpy.context.object
@@ -113,7 +113,7 @@ def _halfspace(n, d, size=400.0):
 
 
 def _cylinder(axis, t0, t1, r, at=(0, 0, 0), seg=192):
-    """Цилиндр радиуса r вдоль axis, от t0 до t1 вдоль оси, отсчёт от at."""
+    """A cylinder of radius r along axis, from t0 to t1 along it, measured from at."""
     bpy, _, Vector, Matrix = _bl()
     u = Vector(axis).normalized()
     bpy.ops.mesh.primitive_cylinder_add(vertices=seg, radius=r, depth=(t1 - t0))
@@ -132,7 +132,7 @@ def _boolean(obj, cutter, op):
 
 
 def _region(planes, size=400.0):
-    """Резак как пересечение полупространств: клин, слой, четверть."""
+    """A cutter as an intersection of half-spaces: a wedge, a slab, a quarter."""
     bpy, _, _, _ = _bl()
     bpy.ops.mesh.primitive_cube_add(size=size)
     o = bpy.context.object
@@ -253,7 +253,7 @@ def run_in_blender(argv):
 # ======================= the part that runs outside =======================
 
 def cmd_fit(argv):
-    """Плоскости и окружности по границам цвета в разложенной сетке."""
+    """Planes and circles fitted to colour borders in an exploded mesh."""
     import numpy as np
     from scipy.spatial import cKDTree
     from scipy.sparse import coo_matrix
@@ -315,35 +315,36 @@ def cmd_fit(argv):
 
 
 def cmd_inlay(argv):
-    """Из нарисованной зоны на кривой поверхности — тела вставки и кармана.
+    """From a painted zone on a curved surface — the inlay and pocket solids.
 
-    Зона, обёрнутая вокруг выпуклой поверхности, не вынимается из кармана
-    с радиальными стенками: с одной стороны она упрётся. От масштаба это не
-    зависит — разворот по дуге при увеличении не меняется. Поэтому стенки
-    кармана делаются призмой вдоль ОДНОГО направления (средняя нормаль
-    зоны), дно — плоскостью перпендикулярно ему, а глубина в самом глубоком
-    месте берётся как толщина по краю плюс размах зоны вдоль этого
-    направления. Иначе вставка на краях сходит на нет.
+        A zone wrapped around a convex surface will not come out of a pocket with
+        radial walls: on one side it jams. Scale does not help — the sweep along an
+        arc does not change when the model grows. So the pocket walls are made as a
+        prism along ONE direction (the zone's mean normal), the floor as a plane
+        perpendicular to it, and the depth at the deepest place is taken as the
+        thickness at the rim plus the zone's extent along that direction. Otherwise
+        the inlay tapers to nothing at the edges.
 
-    Резать ли зону в отдельную деталь — отдельный вопрос, и он возникает,
-    когда зона СОПРИКАСАЕТСЯ с телом того же цвета (на шаре test 3 белая
-    волна вырастала из белого низа: одна связная зона 1163 мм²). Тогда её
-    можно оставить приливом соседней детали, а не резать. `--assembly` даёт
-    направление, по которому сосед садится на место, и печатает вердикт:
+        Whether to cut the zone into a separate part is a different question, and it
+        arises when the zone TOUCHES a body of the same colour — then it may be left
+        as a boss on the neighbouring part instead of being cut. `--assembly` gives
+        the direction along which the neighbour seats, and prints a verdict:
 
-    * min(n·a) <= 0 — часть зоны смотрит назад, сосед на такой прилив
-      не наденется: только вставка;
-    * доля площади с n·a < LIP_COS больше LIP_SHARE % — стенка призмы
-      встречает поверхность по касательной, вдоль контура идёт лезвие
-      (на волне test 3 было 28 % площади с кромкой острее 6°): только вставка;
-    * прилив смотрит в стол при печати соседа — этого инструмент не знает,
-      это вопрос к человеку: у шапки, которая ложится плоскостью реза на стол,
-      любой прилив на этой плоскости означает печать купола на поддержках;
-    * если ни одно не сработало — **резать нельзя**, зона остаётся приливом.
+        * min(n*a) <= 0 — part of the zone faces backwards and the neighbour will
+          not slide onto such a boss: inlay only;
+        * the share of area with n*a < LIP_COS above LIP_SHARE % — the prism wall
+          meets the surface tangentially and a blade runs along the contour:
+          inlay only;
+        * the boss faces the bed while the neighbour prints — the tool cannot know
+          this, and it is a question for the person: on a cap that lies on the bed
+          by its cut plane, any boss on that plane means printing a dome on
+          supports;
+        * if none of these fired — **it must not be cut**, the zone stays a boss.
 
-    И обратная сторона: если зону всё-таки режем, новый шов обязан лечь на
-    уже существующий (на плоскость главного реза) — иначе внутри одного цвета
-    появляется лишняя видимая линия, и это надо не решать самому, а спросить."""
+        And the other side of it: if the zone is cut after all, the new seam must
+        fall onto one that already exists (the main cut plane) — otherwise an extra
+        visible line appears inside a single colour, and that is to be asked about,
+        not decided alone."""
     import numpy as np
     from scipy import ndimage
     from scipy.spatial import cKDTree

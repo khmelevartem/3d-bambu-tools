@@ -299,8 +299,8 @@ def main():
 
 
 def extract_3mf(path):
-    """Достать сетки из 3MF в отдельные STL — ремонтировать и смотреть.
-    Обратно в проект они НЕ кладутся: см. skills/mesh-repair."""
+    """Extract the meshes of a 3MF into separate STLs — to repair and to look at.
+        They are NOT put back into the project this way: see skills/mesh-repair."""
     import zipfile, xml.etree.ElementTree as ET, struct
     base = os.path.splitext(path)[0]
     made, painted = [], 0
@@ -338,13 +338,14 @@ def extract_3mf(path):
 
 
 def put_3mf(project, obj_id, stl, out):
-    """Вернуть починенную сетку в авторскую оболочку 3MF.
+    """Return a repaired mesh into the author's 3MF shell.
 
-    Меняются только <vertices> и <triangles> нужного объекта плюс счётчики
-    граней. Пластины, вторые детали, превью, профиль печати автора остаются
-    как были — это тот же приём, что в 3d-modeling/references/foreign-3mf.md.
-    Покраска по треугольникам при этом теряется: она привязана к их номерам.
-    """
+        Only <vertices> and <triangles> of the object in question change, plus the
+        face counters. Plates, other parts, the preview and the author's print
+        profile stay as they were — the same technique as in
+        skills/3d-modeling/references/foreign-3mf.md. Per-triangle paint is lost
+        in the process: it is bound to triangle numbers.
+"""
     import zipfile, shutil, struct, xml.etree.ElementTree as ET, re as _re
     out = out or os.path.splitext(project)[0] + "_fixed.3mf"
 

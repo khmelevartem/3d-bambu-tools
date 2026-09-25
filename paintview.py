@@ -26,14 +26,14 @@ NAME = {-1: 'дроб', 1: 'чёрн', 2: 'тело', 3: 'бел ', 4: 'зол '
 
 
 def palette(npz):
-    """Палитра проекта, если paint.py её сохранил, иначе условная PAL выше.
+    """The project's palette if paint.py saved one, otherwise the fallback PAL.
 
-    Раньше палитра была всегда условной, и на чужом проекте цвета оказывались
-    переставлены: у Dutch четвёртый филамент телесный (#FFE0C1), а PAL красила
-    его золотым. Подмена видна по превью.
+    On a foreign project the fallback swaps colours around — its filament order
+    is not yours — and the preview then shows a skin tone as gold. Always prefer
+    the saved palette; the substitution is visible in the preview itself.
 
-    Совсем чёрный поднимаем до различимой яркости: на #010102 рельеф не читается
-    вовсе, а превью нужно именно для того, чтобы рельеф было видно."""
+    Near-black is lifted to a distinguishable brightness: at #010102 no relief
+    reads at all, and relief is the whole point of the preview."""
     raw = npz['fcol'] if 'fcol' in npz.files else []
     if len(raw) == 0:
         return dict(PAL)

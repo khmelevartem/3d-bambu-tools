@@ -9,7 +9,7 @@ THEIR file: its shell and `project_settings.config` were written by Bambu itself
 
     python3 tools/retune_project.py human_file.3mf -o ready.3mf
     python3 tools/retune_project.py file.3mf -o ready.3mf \
-        --from "models/adam guitar/adam guitar 2.3mf"
+        --from "models/other/reference.3mf"
 
 What gets ported: key values from a reference project — one that Bambu
 Studio saved with the right nozzle and process.
@@ -17,15 +17,13 @@ Studio saved with the right nozzle and process.
 What is NOT touched, and this is the important part:
 
 * `different_settings_to_system` — the list of edits relative to the system
-  preset. **It must not be invented.** Verified 2026-09-20 on
-  `robbie albert hand lower`: with a list written by me (11 keys, including
-  `curr_bed_type`) the GUI would not open the file; the same file with the
-  author's list left intact opened. Nothing else differed between the tries.
+  preset. **It must not be invented.** A hand-written list, even a plausible
+  one, makes the GUI refuse to open the file; the same file with the author's
+  list left intact opens.
 * **the keys in that list themselves** — they are what the human changed by
   hand: supports switched on, the layer chosen, the prime tower switched off.
   The reference carries its own decisions for the same keys, and without this
-  caveat the port wipes their work: on `robbie albert` the reference turned
-  off supports the human had turned on.
+  caveat the port silently wipes their work.
 * `filament_colour` — the colours they picked for their own spools.
 * print hosts (`host_type`, `printhost_*`) — those are about their account.
 
@@ -41,8 +39,6 @@ import json
 import re
 import sys
 import zipfile
-
-DEFAULT_REF = "models/adam guitar/adam guitar 2.3mf"
 
 # Not ported: either the human's choice, or structure the GUI writes itself.
 KEEP = {
@@ -71,8 +67,8 @@ def main():
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("src", help="project saved by the Bambu Studio GUI")
     ap.add_argument("-o", "--out", required=True, help="where to write the result")
-    ap.add_argument("--from", dest="ref", default=DEFAULT_REF,
-                    help=f"settings reference, also saved by the GUI (default {DEFAULT_REF})")
+    ap.add_argument("--from", dest="ref", required=True,
+                    help="settings reference, a project also saved by the GUI")
     ap.add_argument("--quiet", action="store_true")
     a = ap.parse_args()
 

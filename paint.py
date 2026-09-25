@@ -28,8 +28,8 @@ VERT = re.compile(r'<vertex x="([^"]*)" y="([^"]*)" z="([^"]*)"\s*/>')
 
 
 def model_entry(z):
-    """Имя записи внутри 3MF, где лежит сетка: она бывает и в 3dmodel.model,
-    и в 3D/Objects/*.model."""
+    """The name of the 3MF entry holding the mesh: it lives either in
+        3dmodel.model or in 3D/Objects/*.model."""
     cands = [n for n in z.namelist() if n.endswith('.model')]
     for n in sorted(cands, key=lambda n: -z.getinfo(n).file_size):
         if b'<triangle' in z.read(n)[:200000] or z.getinfo(n).file_size > 100000:
@@ -39,12 +39,12 @@ def model_entry(z):
 
 # ------------------------------------------------ project objects
 def objects(z):
-    """Объекты проекта: (имя, филамент объекта, запись с сеткой).
+    """The project's objects: (name, object filament, entry with the mesh).
 
-    В 3MF от Bambu Studio каждый объект лежит отдельным файлом
-    3D/Objects/object_N.model, а 3D/3dmodel.model только ссылается на них
-    через <component p:path=…>. Имя и экструдер объекта — в
-    Metadata/model_settings.config."""
+        In a 3MF from Bambu Studio each object is its own file
+        3D/Objects/object_N.model, and 3D/3dmodel.model only points at them through
+        <component p:path=...>. The object's name and extruder are in
+        Metadata/model_settings.config."""
     try:
         top = z.read('3D/3dmodel.model').decode('utf-8')
     except KeyError:
@@ -70,7 +70,7 @@ def objects(z):
 
 
 def pick_object(z, want):
-    """Выбрать объект по имени или по номеру; None — единственный/самый большой."""
+    """Pick an object by name or by number; None takes the only/largest one."""
     obs = objects(z)
     if want is None:
         if len(obs) == 1:
@@ -88,12 +88,12 @@ def pick_object(z, want):
 
 # ------------------------------------------------ brush: split faces
 def paint_bits(code):
-    """Код paint_color -> поток бит.
+    """A paint_color code -> a stream of bits.
 
-    Так пишет TriangleSelector::serialize: биты пакуются в ниблы младшим
-    вперёд, а ниблы в строку — задом наперёд. Поэтому строка читается
-    справа налево. Проверка на файле: у всех дроблёных граней поток
-    расходуется ровно до последнего бита."""
+        That is how TriangleSelector::serialize writes it: bits are packed into
+        nibbles low bit first, and nibbles into the string back to front, so the
+        string reads right to left. The check on a real file: on every subdivided
+        face the stream is consumed to the very last bit."""
     out = []
     for ch in reversed(code):
         v = int(ch, 16)
@@ -102,21 +102,21 @@ def paint_bits(code):
 
 
 def paint_tree(code):
-    """Дроблёная грань -> [(состояние, барицентрические координаты 3x3), …].
+    """A subdivided face -> [(state, barycentric coordinates 3x3), ...].
 
-    Состояние 0 — «цвета нет», то есть экструдер объекта; N — филамент N.
-    Разбиение то же, что в TriangleSelector::perform_split: 2 бита — сколько
-    сторон поделено, 2 бита — особая сторона, дальше поддеревья детей.
+        State 0 means "no colour", that is the object's extruder; N means filament
+        N. The subdivision is the one in TriangleSelector::perform_split: 2 bits for
+        how many sides are split, 2 bits for the special side, then the children's
+        subtrees.
 
-    Порядок детей в потоке — обратный порядку разбиения; установлен опытом,
-    а не из документации: перебор всех 24 расстановок на грани куба y=+12.8,
-    где покраска заведомо полосами, дал у обратного порядка границу цвета
-    798 пикселей против 1118 у ближайшего и 10154 у худшего (work/face_search).
-    Прямой порядок даёт узнаваемую фрактальную кашу вместо полос.
+        **The children come out of the stream in the reverse of the split order.**
+        The forward order yields a recognisable fractal mess instead of bands; the
+        reverse one gives clean colour borders. Verify on a face painted in obvious
+        stripes, by the length of the colour border.
 
-    Сетка получается с T-стыками: соседние грани дробятся на разную глубину,
-    и общее ребро с одной стороны поделено, с другой нет. Для цвета это
-    безразлично, но замкнутой такая сетка не бывает."""
+        The resulting mesh has T-joints: neighbouring faces are split to different
+        depths, so a shared edge is divided on one side and not on the other. That
+        is immaterial for colour, but such a mesh is never watertight."""
     b = paint_bits(code)
     pos = [0]
 
@@ -157,7 +157,7 @@ def paint_tree(code):
 
 
 def adjacency(V, F):
-    """Смежность граней по общему ребру + длины рёбер и площади."""
+    """Face adjacency across shared edges, plus edge lengths and areas."""
     n = len(F)
     E = np.concatenate([F[:, [0, 1]], F[:, [1, 2]], F[:, [2, 0]]])
     E.sort(axis=1)
@@ -175,7 +175,7 @@ def adjacency(V, F):
 
 # ---------------------------------------------------------------- explode
 def cmd_explode(a):
-    """Разложить кисть на подтреугольники: сетка, где каждая грань одноцветна."""
+    """Explode the brush into subtriangles: a mesh in which every face is one colour."""
     z = zipfile.ZipFile(a.src)
     name, ext, ent = pick_object(z, a.object)
     raw = z.read(ent).decode('utf-8')
@@ -290,7 +290,7 @@ class Mesh:
 
 
 def hop_distance(m, seed_mask, maxhop):
-    """расстояние в гранях от seed_mask, обход по общим рёбрам"""
+    """Distance in faces from seed_mask, walking across shared edges."""
     ptr, dst = m.csr()
     dist = np.full(m.n, 1 << 30, np.int32)
     front = np.flatnonzero(seed_mask)

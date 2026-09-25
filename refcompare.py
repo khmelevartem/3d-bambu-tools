@@ -30,7 +30,7 @@ def _tf(s):
 
 
 def _read_model_xml(raw):
-    """id объекта -> ('mesh', V, F) либо ('components', [(path, id, M, t), ...])."""
+    """Object id -> ('mesh', V, F) or ('components', [(path, id, M, t), ...])."""
     objs = {}
     root = ET.fromstring(raw)
     for ob in root.iter(NS + 'object'):
@@ -54,11 +54,11 @@ def _read_model_xml(raw):
 
 
 def load_3mf(path):
-    """Вершины в миллиметрах на столе: x вправо, y вглубь, z вверх.
+    """Vertices in millimetres on the bed: x right, y away, z up.
 
-    Трансформация из <build><item> обязательна: в проектах Bambu Studio сетка
-    внутри объекта лежит в своих единицах, а в миллиметры её переводит именно
-    эта матрица. Без неё все числа будут в «попугаях»."""
+        The transform from <build><item> is mandatory: in Bambu Studio projects the
+        mesh inside an object lies in its own units, and it is that matrix which
+        converts it to millimetres. Without it every number is in arbitrary units."""
     z = zipfile.ZipFile(path)
     cache = {}
 
@@ -117,7 +117,7 @@ VIEWS = {'front': (0, 1, 0), 'back': (0, -1, 0), 'left': (1, 0, 0), 'right': (-1
 
 
 def to_screen(V, view):
-    """-> (u вправо, v вверх, d глубина: больше = ближе к камере)."""
+    """-> (u right, v up, d depth: larger = nearer the camera)."""
     d = np.array(VIEWS[view], float)
     up = np.array([0, 0, 1.0])
     right = np.cross(d, up)
@@ -137,10 +137,10 @@ def vnormals(V, F):
 
 
 def raster(U, Vv, D, F, N, W, H, s, cx, cy, seed=0):
-    """Треугольники засеиваются точками по площади проекции -> z-буфер.
+    """Triangles are seeded with points by projected area -> a z-buffer.
 
-    Сплат по одним вершинам оставляет соль-перец даже на плотной сетке:
-    шаг вершин сравним с пикселем только в среднем, а не везде."""
+        Splatting vertices alone leaves salt-and-pepper even on a dense mesh: the
+        vertex spacing matches a pixel only on average, not everywhere."""
     X = cx + s * U
     Y = cy - s * Vv
     Zb = np.full(W * H, -1e9)
@@ -186,7 +186,7 @@ def raster(U, Vv, D, F, N, W, H, s, cx, cy, seed=0):
 # -------------------------------------------------------------------- photo
 
 def photo_mask(img, tol=14):
-    """Фон у студийного рендера ровный: берём медиану рамки."""
+    """A studio render has a flat background: take the median of the frame."""
     A = img.astype(np.float64)
     bg = np.median(np.concatenate([A[:5].reshape(-1, 3), A[-5:].reshape(-1, 3),
                                    A[:, :5].reshape(-1, 3), A[:, -5:].reshape(-1, 3)]), axis=0)
@@ -266,16 +266,18 @@ def load_state(p):
 # -------------------------------------------------------- relief and features
 
 def relief(Z, mask, box, sigma, facing=None, nz=0.6):
-    """Высота над сглаженной поверхностью: так проступают глаза, брови, усы.
+    """Height above the smoothed surface: this is what makes eyes, brows and a
+        moustache stand out.
 
-    sigma брать крупнее самой большой детали и мельче самого лица. Меньше —
-    деталь уйдёт в «базу» вместе со своим рельефом и окажется меньше, чем есть;
-    больше — в рельеф полезет общая форма головы.
+        Take sigma larger than the largest feature and smaller than the face itself.
+        Smaller, and the feature goes into the "base" together with its own relief
+        and comes out smaller than it is; larger, and the overall shape of the head
+        creeps into the relief.
 
-    Считать только по поверхности, повёрнутой к камере (facing = nz нормали):
-    там, где щека или подбородок заворачивают от зрителя, глубина обрушивается
-    и тянет базу вниз — рельеф вокруг рта раздувается, усы слипаются со щеками
-    в одно пятно, и детали перестают различаться."""
+        Compute only over surface turned towards the camera (facing = nz of the
+        normal): where a cheek or a chin turns away, depth collapses and drags the
+        base down — the relief around the mouth swells, a moustache merges with the
+        cheeks into one patch, and features stop being distinguishable."""
     W = np.zeros_like(mask)
     W[box[0]:box[1], box[2]:box[3]] = True
     W &= mask
@@ -287,19 +289,23 @@ def relief(Z, mask, box, sigma, facing=None, nz=0.6):
 
 
 def match_shift(R, valid, m, maxsh, ringw):
-    """Куда уехала деталь: ищем сдвиг, при котором силуэт детали с картинки
-    ложится на самое выпуклое место рельефа модели.
+    """Where a feature drifted to: find the shift at which the feature's
+        silhouette from the picture lands on the most convex place of the model's
+        relief.
 
-    Сегментировать рельеф и сопоставлять пятна — заманчиво, но ломается:
-    вылепленное пятно слипается со щекой, режется краем окна, и главное —
-    качество пары нечем мерить, ведь перекрытие съедает как раз тот сдвиг,
-    который мы ищем. Корреляция ничего не сегментирует и отвечает прямо.
+        Segmenting the relief and matching patches is tempting but breaks down: a
+        sculpted patch merges with the cheek, is cut by the window edge, and above
+        all there is nothing to score a pair with, since overlap swallows exactly
+        the shift being looked for. Correlation segments nothing and answers
+        directly.
 
-    Кольцо вокруг детали вычитается, чтобы убрать общий наклон лица: важно,
-    насколько деталь выступает над своим окружением, а не её высота.
+        A ring around the feature is subtracted to remove the overall slope of the
+        face: what matters is how far the feature stands out from its surroundings,
+        not its height.
 
-    Считать надо по тем пикселям, где рельеф есть: снаружи окна дырка, и если
-    её молча взять за ноль, корреляция уедет туда, где дырка побольше."""
+        Compute only over pixels where relief exists: outside the window there is a
+        hole, and taking it silently as zero sends the correlation off to wherever
+        the hole is largest."""
     from scipy.signal import fftconvolve
     ys, xs = np.nonzero(m)
     ring = ndi.binary_dilation(m, np.ones((ringw, ringw), bool)) & ~m
@@ -328,7 +334,7 @@ def match_shift(R, valid, m, maxsh, ringw):
 
 
 def photo_features(img, mask, dark, amin, amax):
-    """Тёмные компактные пятна на светлой картинке: глаза, брови, усы, бородка."""
+    """Dark compact patches on a light picture: eyes, brows, moustache, goatee."""
     lum = img @ np.array([.299, .587, .114])
     lab, n = ndi.label((lum < dark) & mask)
     out = []

@@ -50,7 +50,7 @@ def model_entry(z):
 
 
 def load(path):
-    """Вершины и грани из 3MF или из npz, собранного paint.py parse."""
+    """Vertices and faces from a 3MF, or from an npz built by paint.py parse."""
     if path.endswith('.npz'):
         d = np.load(path, allow_pickle=True)
         return d['V'].astype(float), d['F'].astype(np.int64)
@@ -71,11 +71,12 @@ def triple(s):
 
 # ----------------------------------------------------------------- section
 def cross_section(V, F, p0, nrm, maxext=2.0):
-    """Контуры сечения плоскостью (p0, nrm), мельче maxext в поперечнике.
+    """Section contours by the plane (p0, nrm), no wider than maxext across.
 
-    Возвращает список словарей: центр, ширина, толщина, вектор ширины, точки
-    контура в плоскости и её базис. Мелкие контуры — это и есть искомая деталь:
-    ремень, шнур, дужка; крупные (тело, нога) отсекаются по maxext."""
+        Returns a list of dicts: centre, width, thickness, width vector, contour
+        points in the plane and its basis. The small contours are the feature being
+        looked for — a strap, a cord, a bow; large ones (body, leg) are cut off by
+        maxext."""
     import scipy.sparse as sp
     from scipy.sparse.csgraph import connected_components
     nrm = nrm / np.linalg.norm(nrm)
@@ -142,11 +143,11 @@ def cmd_section(a):
 
 # ------------------------------------------------------------------ ribbon
 def profile_from_mesh(V, F, at, dirv, up, M, maxext):
-    """Профиль будущей ленты = настоящее сечение детали в точке стыка.
+    """Profile of the ribbon = the feature's real section at the joint.
 
-    Придуманный на глаз прямоугольник давал в стыке уступ: у реального ремня
-    сечение не капсула, а приплюснутый овал со своей посадкой на теле. Снятый
-    с сетки профиль садится в торец без ступеньки."""
+        Take the profile off the mesh rather than inventing a rectangle: a real
+        strap is not a capsule but a flattened oval with its own seating on the
+        body, and an invented one leaves a step at the joint."""
     res, _, _ = cross_section(V, F, at, dirv, maxext)
     if not res:
         raise SystemExit('в точке --at нет контура мельче --max: проверь точку и направление')
@@ -170,10 +171,10 @@ def profile_from_mesh(V, F, at, dirv, up, M, maxext):
 
 
 def sweep(prof, A, tA, n0, B, tB, bulge, nseg):
-    """Заметание профиля по кубической Безье с касательными на концах.
+    """Sweep the profile along a cubic Bezier with tangents fixed at the ends.
 
-    Рамка переносится по кривой минимальным поворотом: сечение не крутится
-    вокруг своей оси, и лента не перекашивается."""
+        The frame is carried along the curve by minimal rotation: the section does
+        not spin about its own axis, so the ribbon does not skew."""
     L = np.linalg.norm(B - A)
     P1 = A + bulge[0] * L * tA
     P2 = B - bulge[1] * L * tB

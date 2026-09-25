@@ -81,11 +81,11 @@ DEFAULT_FILAMENTS = [
 
 
 def paint_code(filament: int) -> str:
-    """Строка paint_color для «грань целиком покрашена филаментом N» (N с единицы).
+    """The paint_color string for "this whole face is filament N" (N from one).
 
-    Вывод кодировки — в докстринге модуля. Проверено экспериментом:
-    Bambu Studio 02.08.03.66 читает такой 3mf и при реэкспорте отдаёт те же строки.
-    """
+        The encoding is described in the module docstring. Bambu Studio reads such
+        a 3MF and hands the same strings back on re-export.
+"""
     if not 1 <= filament <= MAX_FILAMENT:
         raise ValueError(f"номер филамента вне диапазона 1..{MAX_FILAMENT}: {filament}")
     if filament < 3:
@@ -97,11 +97,11 @@ def paint_code(filament: int) -> str:
 
 
 def faces_from_vertices(mesh: trimesh.Trimesh, per_vertex: np.ndarray) -> np.ndarray:
-    """Зона грани = зона, за которую «проголосовали» минимум две её вершины.
+    """A face's zone = the zone at least two of its vertices voted for.
 
-    Если все три вершины разные (такое бывает только на стыке трёх зон),
-    берём вершину с наименьшим номером зоны — лишь бы детерминированно.
-    """
+        When all three differ — which happens only where three zones meet — take
+        the vertex with the lowest zone number, purely to stay deterministic.
+"""
     tri = per_vertex[mesh.faces]                      # (F, 3)
     a, b, c = tri[:, 0], tri[:, 1], tri[:, 2]
     out = np.where(a == b, a, np.where(a == c, a, np.where(b == c, b, tri.min(axis=1))))
@@ -114,17 +114,18 @@ def xml_escape(s: str) -> str:
 
 
 def build_object_model(mesh: trimesh.Trimesh, face_fil: np.ndarray) -> bytes:
-    """3D/Objects/object_1.model — геометрия плюс paint_color на гранях.
+    """3D/Objects/object_1.model — geometry plus paint_color on the faces.
 
-    Красим ВСЕ грани, включая `base`, хотя его цвет задаёт и extruder объекта.
-    Раньше грани `base` оставались без атрибута: слайсер читает такую грань как
-    «состояние 0 = экструдер объекта», но посторонний читатель обязан знать это
-    соглашение, и не всякий знает — аддон Blender отдавал их случайному цвету.
-    Оригиналы с MakerWorld несут код на каждой грани; цена явного кода — 1,7 %
-    размера .3mf, потому что файл всё равно зажат в zip.
-    Собираем через список кусков, а не через ElementTree: на 2 млн граней
-    дерево в памяти не помещается, а склейка строк отрабатывает за секунды.
-    """
+        Paint EVERY face, `base` included, even though the object's extruder
+        already sets that colour. A face without the attribute reads as "state 0 =
+        the object's extruder", which only the slicer knows; any other reader may
+        give it the wrong colour. An explicit code costs about 1.7 % of the .3mf,
+        since the file is zip-compressed anyway.
+
+        Build it as a list of string chunks, not through ElementTree: at a couple
+        of million faces the tree does not fit in memory, while joining strings
+        takes seconds.
+"""
     v = np.asarray(mesh.vertices, dtype=np.float64)
     f = np.asarray(mesh.faces, dtype=np.int64)
 
@@ -156,15 +157,14 @@ def build_object_model(mesh: trimesh.Trimesh, face_fil: np.ndarray) -> bytes:
 
 
 def build_single_model(mesh, face_fil, offset, app_version: str) -> bytes:
-    """3D/3dmodel.model со ВСЕЙ геометрией внутри — без расширения production.
+    """3D/3dmodel.model with ALL the geometry inside — no production extension.
 
-    Зачем: Bambu Studio 02.08.03.66 на macOS не открывает в интерфейсе 3MF,
-    у которых геометрия вынесена в отдельный `3D/Objects/*.model` и подключена
-    через `p:path` (расширение production). Молча — ни модели, ни автобэкапа.
-    Проверено на файлах, которые она же сама и записала своим `--export-3mf`:
-    они тоже не открываются. CLI (`--info`, `--slice`) те же файлы читает.
-    Односоставный файл открывается.
-    """
+        Bambu Studio on macOS will not open a 3MF whose geometry is carried in
+        separate `3D/Objects/*.model` files referenced by `p:path`. It fails
+        silently: no model, no auto-backup. That holds even for files the GUI's own
+        `--export-3mf` wrote. The CLI (`--info`, `--slice`) reads them all the same.
+        A single-part file opens.
+"""
     v = np.asarray(mesh.vertices, dtype=np.float64)
     f = np.asarray(mesh.faces, dtype=np.int64)
     dx, dy, dz = offset
@@ -196,7 +196,7 @@ def build_single_model(mesh, face_fil, offset, app_version: str) -> bytes:
 
 
 def build_root_model(offset, app_version: str) -> bytes:
-    """3D/3dmodel.model — обёртка: объект-компонент плюс место на столе."""
+    """3D/3dmodel.model — the wrapper: a component object plus its place on the bed."""
     dx, dy, dz = offset
     return (
         '<?xml version="1.0" encoding="UTF-8"?>\n'
@@ -226,12 +226,12 @@ def build_root_model(offset, app_version: str) -> bytes:
 
 
 def build_model_settings(name: str, base: int, face_count: int, oid: int = 2) -> bytes:
-    """Metadata/model_settings.config — имя объекта, его филамент и одна часть.
+    """Metadata/model_settings.config — object name, its filament, one part.
 
-    Настройки процесса сюда не пишем: они переопределяют профиль, а нам
-    нужен профиль как есть. Заодно не воспроизводим баг Bambu Studio
-    с неэкранированным compatible_printers.
-    """
+        Process settings do not go here: they override the profile, and the profile
+        is wanted as it is. This also avoids reproducing Bambu Studio's unescaped
+        compatible_printers.
+"""
     return (
         '<?xml version="1.0" encoding="UTF-8"?>\n'
         '<config>\n'
@@ -264,7 +264,7 @@ def build_model_settings(name: str, base: int, face_count: int, oid: int = 2) ->
 
 
 def load_profiles():
-    """Подтягивает resolve_profile.py из соседнего файла — он резолвит `inherits`."""
+    """Pulls in resolve_profile.py from the neighbouring file — it resolves `inherits`."""
     import importlib.util
     path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "resolve_profile.py")
     spec = importlib.util.spec_from_file_location("resolve_profile", path)
@@ -274,18 +274,16 @@ def load_profiles():
 
 
 def build_project_settings(filaments, printer: str, process: str) -> bytes:
-    """Metadata/project_settings.config — печатник, процесс и филаменты AMS.
+    """Metadata/project_settings.config — printer, process and the AMS filaments.
 
-    Кладём ПОЛНЫЙ расплющенный профиль, а не пару опознавательных ключей.
-    Так надо: CLI читает часть значений без проверки на null, например
-    BambuStudio.cpp:2095
-        old_printable_height = (int)(config.opt_float("printable_height"));
-    и на урезанном конфиге валится в SIGSEGV ещё до нарезки. С полным
-    профилем `--export-3mf` и `--slice` отрабатывают (проверено).
+        Write the FULL flattened profile, not a couple of identifying keys. The CLI
+        reads some values without a null check — `printable_height` is cast to int
+        straight from the config — and segfaults on a trimmed one before slicing
+        even starts. With the full profile `--export-3mf` and `--slice` both work.
 
-    Значения филамента в профиле — списки на один слот; под N слотов их
-    надо размножить, иначе слайсер возьмёт настройки только первого.
-    """
+        A profile's filament values are lists of one slot; for N slots they must be
+        replicated, or the slicer takes the settings of the first slot only.
+"""
     rp = load_profiles()
     idx = rp.index()
     cfg = rp.flatten(printer, idx)

@@ -77,13 +77,13 @@ def load(path, scale):
 
 
 def absorb(lab, ea, eb, elen, area, bad_of, rounds=12):
-    """Отдать каждый негодный кусок соседу с самой длинной общей границей.
+    """Give every unusable patch to the neighbour with the longest shared border.
 
-    Тем же приёмом, что и paint_despeckle: у мелочи нет своего цвета, она
-    прилипает к тому, с кем граничит длиннее всего. Перекрашивается кусок
-    целиком, а не его кромка, иначе внутри остаётся ядро прежнего цвета.
+        The same move as paint_despeckle: a speck has no colour of its own, so it
+        sticks to whatever it borders longest. The whole patch is repainted, not
+        its rim, or a core of the old colour stays inside.
 
-    bad_of(lab, cc, A, clab) -> булев массив по кускам."""
+        bad_of(lab, cc, A, clab) -> a boolean array over patches."""
     lab = lab.copy()
     n = len(lab)
     for _ in range(rounds):
@@ -125,7 +125,7 @@ def absorb(lab, ea, eb, elen, area, bad_of, rounds=12):
 
 
 def patches(lab, ea, eb, n):
-    """Связные куски одного цвета: номер куска для каждой грани."""
+    """Connected patches of one colour: the patch number for every face."""
     same = lab[ea] == lab[eb]
     g = sp.coo_matrix((np.ones(int(same.sum())), (ea[same], eb[same])), shape=(n, n))
     nc, cc = connected_components(g, directed=False)
@@ -133,13 +133,13 @@ def patches(lab, ea, eb, n):
 
 
 def shells(ea, eb, n):
-    """Связные скорлупы сетки безотносительно цвета: отдельные тела."""
+    """Connected shells of the mesh regardless of colour: separate bodies."""
     g = sp.coo_matrix((np.ones(len(ea)), (ea, eb)), shape=(n, n))
     return connected_components(g, directed=False)
 
 
 def drop_faces(keep, F, lab, ea, eb, elen, area):
-    """Выбросить грани и перенумеровать смежность."""
+    """Drop faces and renumber the adjacency."""
     idx = np.full(len(F), -1, np.int64)
     idx[keep] = np.arange(int(keep.sum()))
     e = keep[ea] & keep[eb]
@@ -147,17 +147,17 @@ def drop_faces(keep, F, lab, ea, eb, elen, area):
 
 
 def coarsen(lab, ea, eb, elen, area, min_area):
-    """Съесть куски мельче порога — укрупнить зоны до печатаемых."""
+    """Eat patches finer than the threshold - coarsen zones up to printable ones."""
     return absorb(lab, ea, eb, elen, area, lambda l, cc, A, cl: A < min_area)
 
 
 def loops_of(F, sel):
-    """Граничные петли куска sel: списки вершин в порядке обхода.
+    """Boundary loops of the patch sel: vertex lists in walk order.
 
-    Полуребро (a→b) грани куска граничное, если обратного (b→a) в куске нет.
-    Петли сшиваются по концу: из вершины b выходит следующее граничное
-    полуребро. На вырожденной сетке вершина может иметь несколько выходов —
-    берётся любой неиспользованный, петля всё равно замыкается."""
+        A half-edge (a->b) of a patch face is a boundary one if the reverse (b->a)
+        is not in the patch. Loops are stitched end to end: the next boundary
+        half-edge leaves vertex b. On a degenerate mesh a vertex may have several
+        exits - any unused one is taken, and the loop still closes."""
     f = F[sel]
     he = np.concatenate([f[:, [0, 1]], f[:, [1, 2]], f[:, [2, 0]]])
     own = np.tile(sel, 3)                       # whose face this is
@@ -195,13 +195,14 @@ def loops_of(F, sel):
 
 
 def patch_axis(V, F, sel, area, nrm):
-    """Ось вставки, «нет ли поднутрений» и эффективная ширина куска.
+    """The inlay axis, whether there are undercuts, and the patch's effective width.
 
-    Ось — средняя нормаль куска по площади. Поднутрений нет, если ни одна
-    грань не отвернулась от оси: тогда кусок виден целиком с одной стороны
-    и вынимается призмой. Ширина `2S/L` — та же мерка, что у крапа
-    (для полосы шириной w площадь S = w·l, периметр L ≈ 2·l): ею отличают
-    воротник, который станет вставкой, от цепочки, которая не станет."""
+        The axis is the patch's area-weighted mean normal. There are no undercuts if
+        no face turns away from it: the patch is then visible in full from one side
+        and comes out as a prism. The width `2S/L` is the same measure as for
+        speckle (for a strip of width w the area is S = w*l and the perimeter
+        L ~ 2*l); it is what separates a collar, which will become an inlay, from
+        a chain, which will not."""
     n = (nrm[sel] * area[sel, None]).sum(0)
     ln = np.linalg.norm(n)
     if ln < 1e-12:
@@ -218,7 +219,7 @@ def patch_axis(V, F, sel, area, nrm):
 
 
 def loop_frame(L, d):
-    """Базис плоскости, перпендикулярной оси, и петля в нём."""
+    """A basis for the plane perpendicular to the axis, and the loop within it."""
     u = np.cross(d, [0, 0, 1.0])
     if np.linalg.norm(u) < 1e-6:
         u = np.cross(d, [0, 1.0, 0])
@@ -228,10 +229,11 @@ def loop_frame(L, d):
 
 
 def inward(P):
-    """Направление внутрь контура в каждой его вершине (2D).
+    """The inward direction of the contour at each of its vertices (2D).
 
-    По нормалям двух соседних рёбер, знак — по знаку площади контура:
-    считать «к центру тяжести» нельзя, у вогнутой формы это уводит наружу."""
+        From the normals of the two neighbouring edges, the sign taken from the sign
+        of the contour's area: aiming "towards the centroid" is wrong - on a concave
+        shape that points outwards."""
     A, B = P, np.roll(P, -1, axis=0)
     e = B - A
     ln = np.linalg.norm(e, axis=1); ln[ln == 0] = 1
@@ -245,19 +247,20 @@ def inward(P):
 
 
 def prism_verts(V, loop, d, q0, lip=0.4, shrink=0.0):
-    """Вершины призматической крышки: поясок под кромкой и дно.
+    """Vertices of the prismatic cap: a band under the rim, and a floor.
 
-    Так сделаны глаза у паука: снаружи исходная поверхность, внутрь уходит
-    строго призматический бок и плоское дно. Деталь становится пробкой,
-    соседняя получает точный негатив, и позиционировать вставку руками
-    не надо — её держит стенка кармана. Веер на точку внутри тела, которым
-    петля закрывалась раньше, такой опоры не даёт: поверхность стыка
-    повторяет нарисованную границу цвета и никуда не вставляется.
+        Outside is the original surface; inwards runs a strictly prismatic side and
+        a flat floor. The part becomes a plug, the neighbouring one gets its exact
+        negative, and the inlay needs no positioning by hand - the pocket wall holds
+        it. A fan onto a point inside the body, which is the cheap way to close a
+        loop, gives no such support: the joint surface then repeats the drawn colour
+        border and fits nothing.
 
-    `shrink` — зазор посадки, и он **только у пробки**: карман строится
-    тем же кодом с нулём. Первые `lip` миллиметров стенка идёт точно
-    по кромке, и только ниже уходит внутрь: на видимом стыке щели нет,
-    а глубже пробка входит свободно."""
+        `shrink` is the fit clearance, and it belongs **to the plug only**: the
+        pocket is built by the same code with zero. For the first `lip` millimetres
+        the wall follows the rim exactly and only below that moves inwards, so there
+        is no gap at the visible joint while the plug still enters freely deeper
+        down."""
     L = V[loop]
     u, w, P = loop_frame(L, d)
     ins = inward(P)
@@ -272,7 +275,7 @@ def prism_verts(V, loop, d, q0, lip=0.4, shrink=0.0):
 
 
 def prism_tris(loop, base):
-    """Грани призматической крышки: два яруса стенки и веер по плоскому дну."""
+    """Faces of the prismatic cap: two tiers of wall and a fan across the flat floor."""
     k = len(loop)
     A = np.arange(k); B = (A + 1) % k
     i0 = np.array(loop, np.int64)
@@ -289,16 +292,16 @@ def prism_tris(loop, base):
 
 def build_part(V, F, sel, nrm=None, probe=None, cache=None,
                prism=None, mylab=None, fit=0.12):
-    """Скорлупа куска плюс крышки по петлям. Возвращает вершины и грани.
+    """The patch's shell plus caps over its loops. Returns vertices and faces.
 
-    Вершина веера — середина петли, утопленная внутрь тела вдоль средней
-    нормали кромки. Без утопления она у трети петель оказывается снаружи:
-    у петли, обходящей вогнутое место или тонкий выступ, середина хорды
-    лежит в воздухе, и крышка вылезает за поверхность.
+        The fan's apex is the midpoint of the loop, sunk into the body along the
+        rim's mean normal. Without sinking it, on roughly a third of loops it lands
+        outside: for a loop running around a concave place or a thin protrusion the
+        chord midpoint is in mid-air, and the cap pokes through the surface.
 
-    Вершина считается один раз на петлю и запоминается в cache: петля у двух
-    соседних деталей одна и та же, и веер обязан получиться тот же самый,
-    иначе детали перестают стыковаться."""
+        The apex is computed once per loop and kept in cache: two neighbouring parts
+        share the same loop, and the fan must come out identical, or the parts stop
+        mating."""
     faces = [F[sel]]
     Vx = [V]
     nv = len(V)
@@ -352,12 +355,12 @@ def build_part(V, F, sel, nrm=None, probe=None, cache=None,
 
 
 def inside(V, F, pts):
-    """Лежит ли точка внутри тела: луч вверх, чётность пересечений.
+    """Whether a point lies inside the body: a ray up, parity of crossings.
 
-    Нужно для крышек. Крышка — веер на центр граничной петли, и если петля
-    вьётся по вогнутому месту, её центр оказывается снаружи тела: деталь
-    тогда торчит наружу и налезает на соседнюю. Такую петлю веером не
-    закрыть."""
+        Needed for the caps. A cap is a fan onto the centre of a boundary loop, and
+        if the loop winds around a concave place its centre ends up outside the
+        body: the part then sticks out and overlaps its neighbour. Such a loop
+        cannot be closed with a fan."""
     P = V[F]
     lo, hi = P.min(1), P.max(1)
     out = np.zeros(len(pts), bool)
@@ -386,7 +389,7 @@ def inside(V, F, pts):
 
 
 def check(V, F):
-    """Замкнутость по рёбрам и объём со знаком."""
+    """Watertightness by edges, and the signed volume."""
     E = np.concatenate([F[:, [0, 1]], F[:, [1, 2]], F[:, [2, 0]]])
     E = np.sort(E, axis=1)
     key = E[:, 0].astype(np.int64) * (1 << 32) + E[:, 1]
@@ -411,11 +414,11 @@ def write_stl(path, V, F):
 
 
 def report(lab, ea, eb, elen, area, fcol, title, speck=1.0):
-    """Кусков, площадь, крупнейший кусок, мелочь и длина шва по филаментам.
+    """Patch count, area, largest patch, specks and seam length per filament.
 
-    Мелочь — куски мельче speck мм2: отдельной деталью такое не напечатать
-    и не приклеить, значит либо укрупнять порогом, либо оставлять смену
-    филамента."""
+        A speck is a patch finer than speck mm2: it cannot be printed as a separate
+        part nor glued on, so either coarsen with the threshold or keep a filament
+        change."""
     n = len(lab)
     nc, cc = patches(lab, ea, eb, n)
     A = np.bincount(cc, weights=area, minlength=nc)
@@ -458,11 +461,11 @@ def report(lab, ea, eb, elen, area, fcol, title, speck=1.0):
 
 
 def twin_lookup(F):
-    """Поиск грани с другой стороны ребра.
+    """Find the face on the other side of an edge.
 
-    Возвращает функцию (a, b, своя грань) → соседняя грань или -1. Нужна,
-    чтобы у граничной петли куска узнать, с каким цветом она граничит:
-    сама петля знает только свою сторону."""
+        Returns a function (a, b, own face) -> neighbouring face or -1. Needed so a
+        patch's boundary loop can tell which colour it borders: the loop itself
+        knows only its own side."""
     n = len(F)
     he = np.concatenate([F[:, [0, 1]], F[:, [1, 2]], F[:, [2, 0]]])
     lo = np.minimum(he[:, 0], he[:, 1]).astype(np.int64)
@@ -485,7 +488,7 @@ def twin_lookup(F):
 
 
 def fit_plane(L):
-    """Плоскость наименьших квадратов по вершинам петли: точка, нормаль, отклонения."""
+    """Least-squares plane through the loop's vertices: point, normal, deviations."""
     c = L.mean(0)
     n = np.linalg.svd(L - c, full_matrices=False)[2][2]
     dev = (L - c) @ n
@@ -493,11 +496,11 @@ def fit_plane(L):
 
 
 def inscribed(L, c, n, step=0.2):
-    """Самый большой круг, влезающий в петлю: центр в 3D и радиус.
+    """The largest circle fitting inside the loop: centre in 3D, and radius.
 
-    Петля проецируется на свою плоскость, растрируется и берётся максимум
-    расстояния до края. Центр тяжести не годится: у вогнутого сечения
-    (щиколотка, кисть) он лежит близко к кромке или вовсе вне контура."""
+        The loop is projected onto its plane, rasterised, and the maximum distance
+        to the edge is taken. The centroid will not do: on a concave section - an
+        ankle, a hand - it lies close to the rim or outside the contour entirely."""
     u = np.cross(n, [0, 0, 1.0])
     if np.linalg.norm(u) < 1e-6:
         u = np.cross(n, [0, 1.0, 0])
@@ -528,11 +531,11 @@ def inscribed(L, c, n, step=0.2):
 
 
 def ray_hits(P0, E1, E2, q, dirs):
-    """Расстояние от точки q до первой грани по каждому из направлений dirs.
+    """Distance from point q to the first face along each of the directions dirs.
 
-    Мёллер — Трумбор, векторизованный по граням. Грани подаются уже
-    подготовленной окрестностью: гонять 2.6 млн треугольников на каждый луч
-    незачем, стенка ищется в пределах сантиметра."""
+        Moller-Trumbore, vectorised over faces. The faces come in as a prepared
+        neighbourhood: there is no point running millions of triangles per ray when
+        the wall is within a centimetre."""
     out = np.full(len(dirs), np.inf)
     S = q - P0
     for i, d in enumerate(dirs):
@@ -551,22 +554,23 @@ def ray_hits(P0, E1, E2, q, dirs):
 
 
 def wall_profile(V, F, ftree, p, n, limit=20.0, step=0.25, rays=16, near=12.0):
-    """Толщина стенки вокруг оси по мере ухода вглубь тела.
+    """Wall thickness around the axis as it goes deeper into the body.
 
-    Меряется лучами поперёк оси, а не расстоянием до ближайшей вершины:
-    у сидящей фигуры рядом с запястьем проходит пола пальто, и ближайшая
-    вершина оказывается на ней, а не на стенке рукава. Луч изнутри всегда
-    упирается в свою стенку первым.
+        Measured by rays across the axis, not by the distance to the nearest vertex:
+        on a seated figure a coat skirt runs right past the wrist, and the nearest
+        vertex lands on it rather than on the sleeve wall. A ray from inside always
+        hits its own wall first.
 
-    Марш идёт от шва вглубь и обрывается сам, когда стенка кончилась, —
-    поэтому проверять, не вышла ли ось наружу, отдельно не нужно.
+        The march goes from the seam inwards and stops by itself when the wall ends,
+        so there is no separate check for the axis leaving the body.
 
-    Чего этот замер НЕ видит: деталь ограничена не только сеткой, но и
-    покраской, а тело под цветным пятном тянется дальше. У белой рубашки
-    Датча ниша так просится на 5 мм вглубь плеча, которое уже чёрное.
-    Ловить это здесь пробовал по ближайшей грани — замер шумный, на двух
-    зеркальных плечах давал разные ответы. Ловится ниже по конвейеру,
-    точным булевым в pivot_joint.py: там деталь уже собрана."""
+        What this measurement does NOT see: a part is bounded not only by the mesh
+        but by the paint, and the body under a colour patch runs further. A socket
+        under a light shirt will happily ask for depth inside a shoulder that is
+        already another colour. Catching that here by nearest face is noisy - two
+        mirrored shoulders give different answers. It is caught further down the
+        pipeline, by the exact boolean in pivot_joint.py, where the part is already
+        assembled."""
     u = np.cross(n, [0, 0, 1.0])
     if np.linalg.norm(u) < 1e-6:
         u = np.cross(n, [0, 1.0, 0])
@@ -592,7 +596,7 @@ def wall_profile(V, F, ftree, p, n, limit=20.0, step=0.25, rays=16, near=12.0):
 
 
 def in_loop(V, o, q):
-    """Лежит ли точка q внутри петли o, спроецированной на свою плоскость."""
+    """Whether point q lies inside loop o, projected onto its plane."""
     u = np.cross(o['n'], [0, 0, 1.0])
     if np.linalg.norm(u) < 1e-6:
         u = np.cross(o['n'], [0, 1.0, 0])
@@ -610,14 +614,14 @@ def in_loop(V, o, q):
 
 
 def cap_limit(V, S, k, p, n, wall):
-    """Докуда ось идёт, не протыкая крышку соседнего шва.
+    """How far the axis may run without piercing the cap of a neighbouring seam.
 
-    Деталь ограничена не только наружной поверхностью: по каждому своему
-    шву она закрыта крышкой, а крышки в исходной сетке нет, и лучами её
-    не поймать. Зато крышка — это почти диск в плоскости своей петли,
-    и пересечение оси с ним считается напрямую. Без этого предела ниша
-    на плече уходила из жилета в пальто: жилет весь 0.5 см³, а ниша
-    просилась на 5 мм вглубь."""
+        A part is bounded not only by its outer surface: along every one of its
+        seams it is closed by a cap, and that cap is not in the original mesh, so
+        rays cannot find it. But a cap is very nearly a disc in the plane of its
+        loop, and the axis's intersection with it is computed directly. Without this
+        limit a socket in a shoulder walks out of one garment into the next - a
+        half-cubic-centimetre part will ask for a socket five millimetres deep."""
     lp = lm = np.inf
     for j, o in enumerate(S):
         if j == k:
@@ -637,7 +641,7 @@ def cap_limit(V, S, k, p, n, wall):
 
 
 def local_faces(V, F, ftree, p, n, near=8.0, span=20.0):
-    """Грани вокруг отрезка оси — заготовка под лучи, чтобы не гонять всю сетку."""
+    """Faces around a segment of the axis - a shortlist for the rays, to avoid the whole mesh."""
     idx = set()
     for t in np.arange(-span, span, near * 0.8):
         idx.update(ftree.query_ball_point(p + n * t, near))
@@ -649,16 +653,15 @@ def local_faces(V, F, ftree, p, n, near=8.0, span=20.0):
 
 
 def ahead(tri, p, n, r, k=8):
-    """Докуда вдоль оси есть тело — по всему сечению ниши, а не по одной оси.
+    """How far along the axis there is body - across the socket's whole section,
+        not along the axis alone.
 
-    Стенку вокруг ниши меряют лучи поперёк, а дно под ней не мерил никто:
-    ниша упиралась в дальнюю поверхность детали и становилась сквозной.
-    На Датче так выходило у пальто — от шва до наружной стороны 1.9 мм,
-    а ниша просилась на 1.5.
-
-    Лучей несколько: дно у ниши шириной в несколько миллиметров, и над её
-    краем поверхность бывает ближе, чем над осью. Пальто с плоским резом
-    дало по оси запас, а по краю сечения — дно на 77 %."""
+        Rays across the axis measure the wall around a socket, but nothing measures
+        the floor beneath it, and the socket then reaches the far surface and
+        becomes a through hole. Several rays are needed because a socket is a few
+        millimetres wide, and over its rim the surface can be nearer than over its
+        axis: a flat cut can leave clearance on the axis while the floor at the edge
+        of the section is already three quarters used up."""
     P0, E1, E2 = tri
     out = float(ray_hits(P0, E1, E2, p, n[None, :])[0])
     if r <= 0:
@@ -675,23 +678,24 @@ def ahead(tri, p, n, r, k=8):
 
 
 def pick_dowel(V, F, ftree, p, n, R, wall, caps=(np.inf, np.inf), rmax=4.0):
-    """Подобрать радиус и глубину ниши: самый толстый штифт, который лезет.
+    """Pick the socket's radius and depth: the thickest pin that will fit.
 
-    Сверху радиус ограничен вписанным в шов кругом R минус стенка; глубину
-    даёт профиль стенки вдоль оси и расстояние до дальней поверхности.
-    Ровно на R − wall брать нельзя: у самого шва стенка тогда равна wall
-    впритык, и любая ямка поверхности в десятую миллиметра обнуляет
-    глубину — отсюда ещё 0.15 мм запаса и шаг 0.25 мм.
+        From above the radius is bounded by the circle inscribed in the seam, R,
+        minus the wall; the depth comes from the wall profile along the axis and the
+        distance to the far surface. Taking exactly R - wall is wrong: right at the
+        seam the wall is then wall thick with nothing to spare, and any dimple of a
+        tenth of a millimetre zeroes the depth - hence a further 0.15 mm of margin
+        and a 0.25 mm step.
 
-    Глубина каждой половины — не меньше 1.5 мм и не меньше радиуса, иначе
-    штифт не держит поворот; глубже 2.5 радиусов смысла нет: дальше работает
-    клей, а длинная ниша в тонкой конечности только рвёт стенку."""
+        Each half is at least 1.5 mm deep and at least one radius, or the pin does
+        not resist twisting; deeper than 2.5 radii is pointless - past that the glue
+        works, and a long socket in a thin limb only tears the wall."""
     tp, dp = wall_profile(V, F, ftree, p, n)
     tm, dm = wall_profile(V, F, ftree, p, -n)
     tri = local_faces(V, F, ftree, p, n)
 
     def reach(t, prof, r):
-        """Докуда ниша радиуса r идёт, не подойдя к стенке ближе wall."""
+        """How far a socket of radius r runs without coming closer than wall to the surface."""
         bad = np.flatnonzero(prof < r + wall)
         if not len(bad):
             return float(t[-1]) if len(t) else 0.0
@@ -711,7 +715,7 @@ def pick_dowel(V, F, ftree, p, n, R, wall, caps=(np.inf, np.inf), rmax=4.0):
 
 
 def seam_loops(V, F, lab, cc, clab, area, look, min_len=5.0):
-    """Все петли шва: кто с кем граничит, длина, плоскость, отклонение кромки."""
+    """Every seam loop: who borders whom, length, plane, deviation of the rim."""
     out = []
     seen = set()
     for i in np.unique(cc):
@@ -747,7 +751,7 @@ def seam_loops(V, F, lab, cc, clab, area, look, min_len=5.0):
 
 
 def rebuild(V, F):
-    """Площади граней и смежность по рёбрам заново — после правки сетки."""
+    """Face areas and edge adjacency recomputed - after the mesh was edited."""
     P = V[F]
     area = 0.5 * np.linalg.norm(np.cross(P[:, 1] - P[:, 0], P[:, 2] - P[:, 0]), axis=1)
     n = len(F)
@@ -764,32 +768,30 @@ def rebuild(V, F):
 
 
 def plane_cut_seam(V, F, lab, ea, eb, s, sa, la, lb, margin):
-    """Перевести шов с контура цвета на плоскость, разрезав треугольники.
+    """Move a seam from a colour contour onto a plane by cutting triangles.
 
-    Контур цвета рисовал человек или генератор, и плоским он быть не обязан:
-    крышка, затягивающая такую петлю, выходит волнистой, а две волнистые
-    крышки, напечатанные слоями, друг к другу не прилегают.
+        A colour contour was drawn by a person or a generator and need not be
+        planar: a cap stretched over such a loop comes out wavy, and two wavy caps
+        printed in layers do not meet.
 
-    Здесь шов переносится на плоскость по-честному: грани, которые плоскость
-    пересекает, **разрезаются** ею, и каждый кусок получает цвет по свою
-    сторону. Переносить грань целиком по её центру нельзя — пробовал
-    21.09.2026 на Датче: граница начинает метаться на один треугольник
-    туда-сюда, шов 905 → 1342 мм, красный жилет распадается с двух кусков
-    на тридцать два.
+        Here the seam is moved onto a plane honestly: the faces the plane crosses
+        are **cut** by it, and each piece takes the colour of its own side. Carrying
+        a whole face over by its centroid is not good enough - the border then
+        jitters one triangle back and forth, the seam grows by half its length again
+        and a single zone falls apart into dozens of patches.
 
-    Правится только полоса вокруг самой петли, и только в двух цветах,
-    которые на этом шве встречаются: та же плоскость, продлённая через
-    фигуру, режет и туловище, и стул, а третий цвет, попавший в полосу,
-    она бы просто съела.
+        Only a band around the loop itself is edited, and only in the two colours
+        that meet at that seam: the same plane, extended through the figure, cuts
+        other parts too, and a third colour caught in the band would simply be eaten.
 
-    **Резать приходится шире, чем красить.** Ребро делится пополам новой
-    вершиной, и грань по ту сторону ребра обязана узнать о ней, даже если
-    сама она вне полосы и цвет ей не меняют: иначе на краю полосы остаётся
-    висячая вершина, петля шва раздваивается и деталь перестаёт быть
-    замкнутой. Поэтому цвет меняется внутри полосы, а делятся все грани,
-    которых коснулся рез.
+        **The cut has to be wider than the repaint.** An edge is halved by a new
+        vertex, and the face on the other side of that edge must learn about it even
+        if it lies outside the band and keeps its colour: otherwise a hanging vertex
+        is left at the band's edge, the seam loop forks and the part stops being
+        closed. So colour changes inside the band, while every face the cut touched
+        is split.
 
-    Возвращает новые V, F, lab и число разрезанных граней."""
+        Returns new V, F, lab and the number of faces cut."""
     c, n = s['c'], s['n']
     h = s['dmax'] + margin
     R = s['rad'] + margin
@@ -865,7 +867,7 @@ def plane_cut_seam(V, F, lab, ea, eb, s, sa, la, lb, margin):
         drop[f] = True
         split += 1
         def col(v_idx_list, fallback):
-            """Цвет куска: по стороне плоскости, если мы в полосе."""
+            """The piece's colour: by which side of the plane it is on, if we are in the band."""
             if not inband:
                 return fallback
             t = [sv[v] for v in v_idx_list if v < len(V)]
@@ -894,10 +896,10 @@ def plane_cut_seam(V, F, lab, ea, eb, s, sa, la, lb, margin):
 
 def flatten_seams(V, F, lab, ea, eb, elen, area, cc, clab, S, which, flat,
                   margin=0.6):
-    """Перенести выбранные швы на их плоскости. Возвращает обновлённую сетку.
+    """Move the selected seams onto their planes. Returns the updated mesh.
 
-    Все задания готовятся до первого реза: после него нумерация граней
-    меняется, а `c`, `n`, петля и цвета сторон — нет."""
+        Every job is prepared before the first cut: after it the face numbering
+        changes, while `c`, `n`, the loop and the side colours do not."""
     C = V[F].mean(1)
     jobs = []
     for k in which:
@@ -925,17 +927,17 @@ def flatten_seams(V, F, lab, ea, eb, elen, area, cc, clab, S, which, flat,
 
 def report_inlay(V, F, lab, cc, clab, area, nrm, fcol, depth, minw, wall,
                  want=None):
-    """Какие куски годятся во вставку, и назвать вслух те, что не годятся.
+    """Which patches are fit to be an inlay, and say out loud which are not.
 
-    Вставка — цветное пятно, которое уходит в соседнюю деталь пробкой
-    с прямыми стенками и плоским дном. Для этого нужны три вещи:
-    одна граничная петля (у пояса их две, и он режется иначе), отсутствие
-    поднутрений вдоль оси и **ширина**. Ширина и есть тот случай, о котором
-    надо говорить прямо: у белой цепочки на груди 2S/L меньше миллиметра,
-    карман под неё будет тоньше стенки, и вставки не выйдет — там честнее
-    оставить смену филамента, AMS её отработает.
+        An inlay is a colour patch that goes into the neighbouring part as a plug
+        with straight walls and a flat floor. That takes three things: a single
+        boundary loop (a belt has two and is split differently), no undercuts along
+        the axis, and **width**. Width is the case to be plain about: on a thin
+        chain or a piped edge 2S/L is under a millimetre, a pocket for it would be
+        thinner than the wall, and no inlay will come of it - there it is more
+        honest to keep the filament change, which the AMS will handle.
 
-    Возвращает словарь «петля → (ось, дно, чей это цвет)» для build_part."""
+        Returns a dict "loop -> (axis, floor, whose colour it is)" for build_part."""
     out, rows = {}, []
     for i in np.unique(cc):
         sel = np.flatnonzero(cc == i)
@@ -978,7 +980,7 @@ def report_inlay(V, F, lab, cc, clab, area, nrm, fcol, depth, minw, wall,
 
 
 def report_joints(V, F, lab, cc, clab, area, fcol, flat, wall, args):
-    """Список швов с вердиктом «плоский рез» и подобранным штифтом."""
+    """Seams with a flat-cut verdict and the pin picked for each."""
     from scipy.spatial import cKDTree
     C = V[F].mean(1)
     ftree = cKDTree(C)
@@ -1048,16 +1050,17 @@ def report_joints(V, F, lab, cc, clab, area, fcol, flat, wall, args):
 
 
 def flatten_seam(V, s, tol):
-    """Положить вершины петли точно на плоскость шва, но не дальше tol.
+    """Lay the loop's vertices exactly on the seam plane, but no further than tol.
 
-    Крышка строится веером по петле, поэтому ровной крышка бывает только
-    у ровной петли, а ровная крышка — единственное, что на печати слоями
-    сходится само. Сдвиг идёт вдоль нормали плоскости, наружную поверхность
-    трогает на те же доли миллиметра и одинаково у обеих деталей, так что
-    силуэт на стыке не рвётся.
+        A cap is built as a fan over the loop, so a cap is flat only if the loop is,
+        and a flat cap is the only kind that meets by itself in layer printing. The
+        shift runs along the plane's normal, moves the outer surface by the same
+        fractions of a millimetre and equally on both parts, so the silhouette does
+        not break at the joint.
 
-    Шов, у которого кромка гуляет сильнее tol, не трогается вовсе: это
-    уже не плоский стык, и притягивать его к плоскости — менять форму."""
+        A seam whose rim wanders further than tol is not touched at all: that is no
+        longer a flat joint, and pulling it onto a plane would be changing the
+        shape."""
     L = np.array(s['loop'], np.int64)
     d = (V[L] - s['c']) @ s['n']
     if np.abs(d).max() > tol:

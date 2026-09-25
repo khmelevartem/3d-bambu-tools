@@ -75,12 +75,12 @@ def run_in_blender(argv):
         print(f'загружено «{name}»: граней {n}, объём {v:.2f} см3, открытых рёбер {op}')
 
     def heal(o, rounds=6):
-        """Убрать non-manifold рёбра: они ломают точное булево.
+        """Remove non-manifold edges: they break exact booleans.
 
-        У деталей от paint_split.py такие рёбра сидят там, где сходятся
-        крышки трёх зон — глубоко внутри детали. Грани при таком ребре
-        выбрасываются, дырка зашивается. Правка локальная, снаружи не видна,
-        но без неё Blender на булевом выдаёт вывернутый наизнанку объём."""
+                On parts from paint_split.py such edges sit where the caps of three
+                zones meet, deep inside the part. The faces at such an edge are dropped
+                and the hole is stitched. The fix is local and invisible from outside,
+                but without it Blender's boolean returns an inside-out volume."""
         bm = bmesh.new(); bm.from_mesh(o.data)
         n0 = sum(1 for e in bm.edges if len(e.link_faces) > 2)
         for _ in range(rounds):
@@ -103,7 +103,7 @@ def run_in_blender(argv):
             print(f'  «{o.name}»: non-manifold рёбер {n0} → {n1}, открытых {op}')
 
     def orient(d):
-        """поворот, переводящий +Z в направление d"""
+        """The rotation taking +Z to direction d."""
         return Vector(d).normalized().to_track_quat('Z', 'Y').to_euler()
 
     def cylinder(p, d, t0, t1, dia, verts=128):
@@ -115,7 +115,7 @@ def run_in_blender(argv):
         return bpy.context.view_layer.objects.active
 
     def box(p, d, t0, t1, side, verts=None):
-        """Призма квадратного сечения вдоль оси d — ниша или штифт от поворота."""
+        """A square-section prism along axis d — a socket or a pin, depending on sign."""
         d = Vector(d).normalized()
         mid = Vector(p) + d * ((t0 + t1) / 2)
         bpy.ops.mesh.primitive_cube_add(size=1.0, location=mid, rotation=orient(d))
@@ -128,7 +128,7 @@ def run_in_blender(argv):
         return (box if shape == 'rect' else cylinder)(p, d, t0, t1, size)
 
     def tube(p, d, t0, t1, dia, dia_in):
-        """кольцевой резец: выборка только в поясе от dia_in до dia"""
+        """An annular cutter: material is taken only in the band from dia_in to dia."""
         o = cylinder(p, d, t0, t1, dia)
         i = cylinder(p, d, t0 - 1, t1 + 1, dia_in)
         boolean(o, i)
@@ -142,7 +142,7 @@ def run_in_blender(argv):
         bpy.data.objects.remove(cutter, do_unlink=True)
 
     def bisect(o, p, d, keep_positive):
-        """отрезать половину плоскостью и закрыть срез плоской крышкой"""
+        """Cut half away with a plane and close the cut with a flat cap."""
         bm = bmesh.new(); bm.from_mesh(o.data)
         geom = bm.verts[:] + bm.edges[:] + bm.faces[:]
         res = bmesh.ops.bisect_plane(bm, geom=geom, dist=1e-6,
@@ -178,11 +178,11 @@ def run_in_blender(argv):
         heal(o)
 
     def material(t, cy):
-        """Сколько материала детали попадает в резец, см3.
+        """How much of the part's material falls inside the cutter, cm3.
 
-        Считается отдельным пересечением, а не разностью объёмов: резец,
-        который детали не касается, Blender не выбрасывает, а вклеивает
-        вывернутым наизнанку, и разность тогда врёт."""
+                Computed as a separate intersection, not as a difference of volumes: a
+                cutter that does not touch the part is not discarded by Blender but
+                glued in inside-out, and the difference then lies."""
         probe = t.copy(); probe.data = t.data.copy()
         bpy.context.collection.objects.link(probe)
         c2 = cy.copy(); c2.data = cy.data.copy()

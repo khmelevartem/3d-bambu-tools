@@ -35,7 +35,7 @@ the seam are in [surface-supports-seam.md](references/surface-supports-seam.md).
 ## Order of work
 
 ```bash
-python3 tools/retune_project.py human_file.3mf -o work/ready.3mf
+python3 tools/retune_project.py human_file.3mf -o work/ready.3mf --from ref.3mf
 python3 tools/figopt.py audit  "models/…/part.3mf"
 uv run --with numpy python tools/figopt.py colors "…/part.3mf"
 uv run tools/figcheck.py part.stl

@@ -43,13 +43,13 @@ SIMPLE = {'', '4', '8', '0C', '1C', '2C', '3C', '4C', '5C', '6C', '7C'}
 
 
 def mesh_members(zf):
-    """Файлы .model с геометрией: 3dmodel.model обычно только оболочка."""
+    """.model files that carry geometry: 3dmodel.model is usually only the shell."""
     out = [n for n in zf.namelist() if n.endswith('.model') and 'Objects/' in n]
     return out or [n for n in zf.namelist() if n.endswith('.model')]
 
 
 def open_edges(faces):
-    """-> (рёбра как пары индексов, номера записей). Запись k: грань k % n, слот k // n."""
+    """-> (edges as index pairs, record numbers). Record k: face k % n, slot k // n."""
     e = np.concatenate([faces[:, [0, 1]], faces[:, [1, 2]], faces[:, [2, 0]]])
     key = np.sort(e, axis=1)
     order = np.lexsort((key[:, 1], key[:, 0]))
@@ -66,7 +66,7 @@ def area(v, faces):
 
 
 def find_tjoints(v, faces, tol):
-    """-> {грань: {слот: [(t, вершина)]}} для граней, на рёбрах которых сидит чужая вершина."""
+    """-> {face: {slot: [(t, vertex)]}} for faces with a foreign vertex sitting on an edge."""
     from scipy.spatial import cKDTree
     e, idx = open_edges(faces)
     print(f'  открытых рёбер: {len(idx)}')
@@ -90,7 +90,7 @@ def find_tjoints(v, faces, tol):
 
 
 def fan(v, faces, attrs, hits):
-    """Разбить помеченные грани веером из центроида. -> (новые вершины, грани, атрибуты)."""
+    """Fan the marked faces out from the centroid. -> (new vertices, faces, attributes)."""
     extra, tri, out_attr = [], [], []
     base = len(v)
     for f in range(len(faces)):

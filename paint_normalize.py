@@ -16,8 +16,9 @@ non-zero if anything diverged: the check is not optional.
 
 The print changes by a fraction of a percent — Bambu runs state 0 and an
 explicit extruder 1 through different segmentation branches, so colour
-borders shift by fractions of a line width. Measured on Dutch: 172.02 ->
-172.57 g, filament changes 543 -> 542. Details: 3mf-paint/paint-format.md.
+borders shift by fractions of a line width. On a painted figurine that came
+out as a third of a percent of plastic and one filament change fewer.
+Details: skills/3mf-paint/references/paint-format.md.
 """
 
 import re
@@ -80,7 +81,7 @@ def default_extruder(zin: zipfile.ZipFile) -> int:
 
 
 def scan(path: str):
-    """Покраска и геометрия файла в виде, пригодном для сравнения."""
+    """A file's paint and geometry in a form fit for comparison."""
     with zipfile.ZipFile(path) as z:
         base = default_extruder(z)
         names = [n for n in z.namelist() if n.endswith(".model")]

@@ -88,7 +88,7 @@ TRI = re.compile(r'<triangle v1="(\d+)" v2="(\d+)" v3="(\d+)"')
 
 # ---------------------------------------------------------------- reading
 def entries(z):
-    """Соответствие id объекта -> запись .model, по 3D/_rels."""
+    """Object id -> .model entry, via 3D/_rels."""
     rels = z.read('3D/_rels/3dmodel.model.rels').decode()
     tg = [m.group(1).lstrip('/') for m in re.finditer(r'Target="([^"]+)"', rels)]
     root = z.read('3D/3dmodel.model').decode()
@@ -97,7 +97,7 @@ def entries(z):
 
 
 def load(path, oid=None):
-    """(V, F) одного объекта 3MF/STL. Для 3MF без oid — первый объект."""
+    """(V, F) of one 3MF/STL object. For a 3MF without oid, the first object."""
     if path.lower().endswith('.stl'):
         import trimesh
         m = trimesh.load(path, process=False)
@@ -112,7 +112,7 @@ def load(path, oid=None):
 
 
 def faces(V, F):
-    """Центры, единичные нормали и площади невырожденных граней."""
+    """Centres, unit normals and areas of the non-degenerate faces."""
     P = V[F]
     n = np.cross(P[:, 1] - P[:, 0], P[:, 2] - P[:, 0])
     a = np.linalg.norm(n, axis=1)
@@ -122,7 +122,7 @@ def faces(V, F):
 
 # ---------------------------------------------------------------- find
 def hough(c, n, ar, sign, rmin, rmax, step, cover, binsz=0.30):
-    """Голосование за центры сфер: c + sign·r·n. sign=+1 гнездо, −1 шар."""
+    """Vote for sphere centres: c + sign*r*n. sign=+1 socket, -1 ball."""
     found = []
     for r in np.arange(rmin, rmax, step):
         q = np.round((c + sign * r * n) / binsz).astype(np.int64)
@@ -142,7 +142,7 @@ def hough(c, n, ar, sign, rmin, rmax, step, cover, binsz=0.30):
 
 
 def refine(c, n, ar, ctr, r, sign):
-    """МНК-уточнение центра и радиуса по граням самой сферы + ось выхода."""
+    """Least-squares centre and radius from the sphere's own faces, plus the exit axis."""
     cc = np.asarray(ctr, float)
     sel = None
     for _ in range(10):
@@ -193,7 +193,7 @@ def cmd_find(a):
 
 # ---------------------------------------------------------------- profile
 def ray_profile(V, F, c, d, ts, na=144, reach=10.0):
-    """r(глубина, угол): лучи с оси наружу, первое попадание."""
+    """r(depth, angle): rays outward from the axis, first hit."""
     import trimesh
     c = np.asarray(c, float)
     d = np.asarray(d, float)
@@ -217,7 +217,7 @@ def ray_profile(V, F, c, d, ts, na=144, reach=10.0):
 
 
 def sphere_bottom(ts, med, lo, hi):
-    """Радиус сферы дна по достоверному участку: r² + t² = R²."""
+    """Radius of the floor sphere from the trustworthy band: r^2 + t^2 = R^2."""
     m = (ts >= lo) & (ts <= hi) & np.isfinite(med)
     return float(np.median(np.sqrt(med[m] ** 2 + ts[m] ** 2)))
 
@@ -301,7 +301,7 @@ def cmd_cutter(a):
 
 # ---------------------------------------------------------------- fit
 def occupancy(V, F, ctr, half, vox):
-    """Занятость по числу оборотов: сдвоенные поверхности не ломают счёт."""
+    """Occupancy by winding number: doubled surfaces do not break the count."""
     T = V[F]
     bl, bh = T[:, :, :2].min(1), T[:, :, :2].max(1)
     sel = ((bh[:, 0] >= ctr[0] - half) & (bl[:, 0] <= ctr[0] + half) &
@@ -370,7 +370,7 @@ def surf_points(V, F, n, seed=0):
 
 
 def neck_axis(V, F, c, lo=2.95, hi=3.60):
-    """Куда уходит шейка: направление материала сразу за шаром."""
+    """Where the neck runs: the direction of material just past the ball."""
     ctr, _, ar = faces(V, F)
     d = np.linalg.norm(ctr - c, axis=1)
     sel = (d > lo) & (d < hi)

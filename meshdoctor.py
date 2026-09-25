@@ -50,7 +50,7 @@ SCALE_WARN = {}          # label -> the <build> scale note, see _build_scales
 
 
 def _uniform_scale(t):
-    """Равномерный масштаб из матрицы 3MF (9 чисел поворота+масштаба). None — если неравномерный."""
+    """Uniform scale from a 3MF matrix (9 rotation+scale numbers). None if non-uniform."""
     a = [float(x) for x in t.split()]
     if len(a) < 9:
         return None
@@ -63,14 +63,13 @@ def _uniform_scale(t):
 
 
 def _build_scales(z, models):
-    """{(файл, id объекта): масштаб} из <build><item> с проходом через <components>.
+    """{(file, object id): scale} from <build><item>, descending into <components>.
 
-    Сетка внутри 3MF лежит в своих единицах, в миллиметры её переводит матрица
-    из <build>. `BambuStudio --info` её НЕ применяет и печатает сырой габарит —
-    проверено 19.09.2026 на «dutch on chair hi3d.3mf»: и он, и meshdoctor дают
-    19.28×25.40×19.79 при масштабе 3.3465, то есть настоящая фигурка 64×85×66 мм.
-    Мы её тоже не применяем (иначе разойдёмся с --info), а называем: без этого
-    вердикт «мельче сопла» занижает дефект во столько же раз.
+    A mesh inside a 3MF lies in its own units; the matrix in <build> converts it
+    to millimetres. `BambuStudio --info` does NOT apply it and prints the raw
+    bounding box. Neither do we, so that the two agree — but the scale is
+    reported, because without it a verdict of "finer than the nozzle" understates
+    the defect by exactly that factor.
     """
     comps, builds = {}, []
     for name in models:
@@ -110,7 +109,7 @@ def _build_scales(z, models):
 
 
 def read_3mf(path):
-    """Каждый <object> с сеткой — отдельно. Индексы уже в файле, склейка не нужна."""
+    """Every <object> with a mesh separately. The indices are already in the file; no joining needed."""
     out = []
     with zipfile.ZipFile(path) as z:
         models = [n for n in z.namelist() if n.lower().endswith('.model')]
@@ -190,9 +189,9 @@ def read_any(path):
 # ---------- vertex merging ----------
 
 def weld(V, F, tol):
-    """Слить вершины ближе tol. Восемь сдвинутых сеток: две точки в пределах
-    tol по каждой оси гарантированно попадают в одну ячейку хотя бы в одном
-    сдвиге, поэтому шов не рассыпается на границе округления."""
+    """Weld vertices closer than tol. Eight shifted grids: two points within tol
+        on every axis are guaranteed to land in one cell in at least one shift, so
+        a seam does not fall apart on a rounding boundary."""
     n = len(V)
     parent = np.arange(n)
 

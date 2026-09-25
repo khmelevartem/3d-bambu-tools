@@ -67,7 +67,7 @@ def frame(ax):
     return u,v,ax
 
 def cylinder(c, ax, r, t0, t1, seg=96):
-    """Цилиндр радиуса r вдоль ax, от t0 до t1, отсчёт от точки c."""
+    """A cylinder of radius r along ax, from t0 to t1, measured from point c."""
     u,v,w=frame(ax)
     a=np.linspace(0,2*np.pi,seg,endpoint=False)
     ring=np.outer(np.cos(a),u)+np.outer(np.sin(a),v)
@@ -143,7 +143,7 @@ def mesh_xml(V, F, oid, code=None):
 
 
 def transform_model(raw, R, T):
-    """Переписать координаты вершин в готовом .model, не трогая грани и покраску."""
+    """Rewrite vertex coordinates in a finished .model, leaving faces and paint alone."""
     out, pos, n = [], 0, 0
     for m in VERT.finditer(raw):
         p = np.array([float(m.group(1)), float(m.group(2)), float(m.group(3))])
@@ -180,7 +180,7 @@ class Project:
         return self.next_id - 2, self.next_id - 1     # inner, outer
 
     def add_mesh_file(self, V, F, code=None):
-        """Новый 3D/Objects/object_N.model. Возвращает (путь, id внутри файла)."""
+        """A new 3D/Objects/object_N.model. Returns (path, id inside the file)."""
         n = 1 + max(int(re.search(r'object_(\d+)\.model', p).group(1))
                     for p in self.files if p.startswith('3D/Objects/'))
         path = f'3D/Objects/object_{n}.model'
@@ -206,7 +206,7 @@ class Project:
         self.add_part(obj_name, part_name, path, inner, subtype)
 
     def move_object_as_part(self, src_name, dst_name, R, T, part_name=None):
-        """Сетку объекта переносим в другой объект как часть: вершины — по R,T."""
+        """Move an object's mesh into another object as a part: vertices go through R,T."""
         oid = self.object_id(src_name)
         ent = self.entry_of(oid)
         raw = self.files[ent].decode()
@@ -222,8 +222,8 @@ class Project:
         return n
 
     def shift_object(self, name, d):
-        """Сдвинуть объект на столе (и в сборке): нужно, когда negative_part
-        срезал низ и деталь повисла над столом."""
+        """Shift an object on the bed (and in the assembly): needed when a
+                negative_part has cut the bottom away and the part hangs above the plate."""
         oid = self.object_id(name)
         def fix(m):
             v = m.group(2).split()
@@ -248,7 +248,7 @@ class Project:
         return ent
 
     def add_object(self, name, V, F, extruder, plate, pos, code=None):
-        """Новый самостоятельный объект на тарелке plate, центр в (x,y) стола."""
+        """A new standalone object on plate `plate`, centred at (x,y) of the bed."""
         path, inner = self.add_mesh_file(V, F, code)
         outer = self.next_id; self.next_id += 1
         obj = (f'  <object id="{outer}" p:UUID="{uuid.uuid4()}" type="model">\n   <components>\n'
@@ -284,8 +284,8 @@ class Project:
         return outer
 
     def replace_mesh(self, obj_name, V, F, codes=None):
-        """Подменить сетку объекта целиком: id внутри файла сохраняется, поэтому
-        ссылки не рвутся. Покраску передавать массивом кодов на грань."""
+        """Replace an object's mesh wholesale: the id inside the file is kept, so no
+                reference breaks. Pass paint as an array of codes per face."""
         oid = self.object_id(obj_name)
         ent = self.entry_of(oid)
         inner = int(re.search(r'<object id="(\d+)"', self.files[ent].decode()).group(1))

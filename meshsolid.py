@@ -70,7 +70,7 @@ def signed_volume(V, F):
 
 
 def orient_outward(V, F):
-    """Развернуть куски, у которых знаковый объём отрицательный."""
+    """Flip the pieces whose signed volume is negative."""
     n = len(F)
     E = np.sort(np.concatenate([F[:, [0, 1]], F[:, [1, 2]], F[:, [2, 0]]]), axis=1)
     key = E[:, 0].astype(np.int64)*(1 << 32) + E[:, 1]
@@ -88,7 +88,7 @@ def orient_outward(V, F):
 
 # --------------------------------------------------- occupancy by rays
 def occupancy_axis(V, F, lo, N, H, r):
-    """Занятость по лучам вдоль оси r. Массив bool в раскладке (nz, ny, nx)."""
+    """Occupancy by rays along axis r. A bool array laid out (nz, ny, nx)."""
     u, v = (r+1) % 3, (r+2) % 3
     Nr, Nu, Nv = N[r], N[u], N[v]
     P = V[F]
@@ -149,7 +149,7 @@ def occupancy_axis(V, F, lo, N, H, r):
 
 # ------------------------------------------------- point-triangle distance
 def point_tri_dist2(p, a, b, c):
-    """Квадрат расстояния от точек до треугольников (Ericson, ClosestPtPointTriangle)."""
+    """Squared distance from points to triangles (Ericson, ClosestPtPointTriangle)."""
     ab, ac, ap = b-a, c-a, p-a
     d1 = np.einsum('ij,ij->i', ab, ap); d2 = np.einsum('ij,ij->i', ac, ap)
     bp = p-b
@@ -182,7 +182,7 @@ def point_tri_dist2(p, a, b, c):
 
 
 def band_distance(P, bb_lo, bb_hi, lo, N, H, k0, k1, band, chunk=3_000_000):
-    """Незнаковое расстояние до поверхности в полосе, для плиты вокселей [k0,k1)."""
+    """Unsigned distance to the surface within a band, for the voxel slab [k0, k1)."""
     nzs = k1 - k0
     out = np.full(nzs*N[1]*N[0], (band*H)**2, np.float32)
     zlo = lo[2] + (k0-0.5)*H - band*H
@@ -236,21 +236,21 @@ def band_distance(P, bb_lo, bb_hi, lo, N, H, k0, k1, band, chunk=3_000_000):
 
 
 def extrapolate(sdf, synth, occ, H, sigma_fill=2.5, rounds=4):
-    """Достроить поле там, где рядом не было ни одного треугольника.
+    """Extend the field where no triangle lay anywhere near.
 
-    В дырке, которую заросла только логика заливки, расстояния до поверхности
-    нет: поле упирается в край полосы, и марширующие кубы дают ступеньку в
-    воксель. Взять значения оттуда неоткуда, поэтому они строятся из САМОЙ
-    занятости, размытой гауссом: нулевой уровень `0.5 - размытая занятость`
-    идёт по сглаженной границе тела. Деталей в дырке нет по определению, так
-    что сглаживание там ничего не теряет, а лесенку снимает.
+        Inside a hole that only the fill logic closed there is no distance to a
+        surface: the field runs into the edge of the band and marching cubes leave
+        a one-voxel step. There is nothing to take values from, so they are built
+        from the OCCUPANCY itself, blurred with a Gaussian: the zero level of
+        `0.5 - blurred occupancy` follows the smoothed boundary of the body. A hole
+        has no detail by definition, so blurring loses nothing there and removes
+        the staircase.
 
-    Дальше несколько проходов диффузии сшивают заплатку с настоящим полем по
-    краю дырки, чтобы на стыке не было излома. Значения вне `synth` при этом
-    держатся жёстко — иначе диффузия расползается по всему объёму и рожает
-    поверхность на пустом месте (на эталонной сфере габарит уезжал с 20.0 на
-    20.9 мм).
-    """
+        A few diffusion passes then stitch the patch to the real field along the
+        rim of the hole, so there is no crease at the join. Values outside `synth`
+        are held hard during this — otherwise diffusion creeps through the whole
+        volume and grows surface out of nothing, visibly inflating the bounding box.
+"""
     occf = gaussian_filter(occ.astype(np.float32), sigma_fill, mode='nearest')
     np.copyto(sdf, (0.5 - occf)*(2.0*H), where=synth)
     del occf
@@ -263,14 +263,15 @@ def extrapolate(sdf, synth, occ, H, sigma_fill=2.5, rounds=4):
 
 
 def collapse_degenerate(V, F, ndigits=6):
-    """Сварить вершины, совпадающие после округления, и выбросить грани,
-    у которых после этого два индекса совпали.
+    """Weld vertices that coincide after rounding, and drop the faces left with
+        two equal indices.
 
-    Это СХЛОПЫВАНИЕ, а не удаление: соседи теряют не ребро, а нулевой
-    треугольник между ними, и сетка остаётся замкнутой. Нужно потому, что
-    сетка потом переводится в единицы файла 3MF (они бывают в разы мельче),
-    и там округление слепляет вершины, которых в миллиметрах хватало.
-    """
+        This is a COLLAPSE, not a deletion: the neighbours lose a zero-area triangle
+        between them, not an edge, and the mesh stays closed. It is needed because
+        the mesh is later converted into the units of the 3MF file, which can be
+        many times finer, and rounding there fuses vertices that were far enough
+        apart in millimetres.
+"""
     key, inv = np.unique(np.round(V, ndigits), axis=0, return_inverse=True)
     F2 = inv[F]
     good = (F2[:, 0] != F2[:, 1]) & (F2[:, 1] != F2[:, 2]) & (F2[:, 2] != F2[:, 0])
@@ -280,8 +281,9 @@ def collapse_degenerate(V, F, ndigits=6):
 
 
 def drop_junk(V, F, frac=1e-3):
-    """Выбросить отдельные тельца мельче доли главного: марширующие кубы
-    оставляют их на одиночных вокселях, а в слайсере это крошки рядом с деталью."""
+    """Drop separate bodies smaller than a fraction of the main one: marching
+        cubes leave them on single voxels, and in the slicer they are crumbs beside
+        the part."""
     n = len(F)
     E = np.sort(np.concatenate([F[:, [0, 1]], F[:, [1, 2]], F[:, [2, 0]]]), axis=1)
     key = E[:, 0].astype(np.int64)*(1 << 32) + E[:, 1]
