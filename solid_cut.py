@@ -90,7 +90,11 @@ def _load(path, name=None):
     if ext == '.stl':
         bpy.ops.wm.stl_import(filepath=path)
     elif ext == '.obj':
-        bpy.ops.wm.obj_import(filepath=path)
+        # Y-up is the OBJ convention and Blender applies it by default, while the
+        # STL importer does not. Mixing the two rotates one mesh against the
+        # other and against the plane cutters, which are written in world
+        # coordinates. Import OBJ unrotated.
+        bpy.ops.wm.obj_import(filepath=path, forward_axis='Y', up_axis='Z')
     else:
         raise SystemExit(f'не умею читать {ext}')
     o = bpy.context.selected_objects[0]
