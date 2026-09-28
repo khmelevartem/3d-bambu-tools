@@ -319,6 +319,34 @@ centres and depths and take the one with a real wall.
 | a patch inlay | one loop, the piece faces one way | prismatic pocket |
 | "by colour" | the loop wanders, there is no plane | nothing straightens it, only glue — **name that price out loud** |
 
+## Choosing the cutting tool
+
+| Situation | Tool |
+|---|---|
+| the seam is a plane or a cylinder, and the parts must sum back to the solid | `solid_cut.py` |
+| a joint across an axis: one cut, a blind socket in each half, a pin | `pivot_joint.py` |
+| the price of cutting by colour, which seams survive, the socket plan | `paint_split.py` |
+| a whole limb cut off with a pin, planned by hand in the Blender viewport | **EasySlice Print**, an addon |
+
+EasySlice Print is an equal member of this list, not a fallback: it plans the
+cut where seeing the figure matters more than computing the seam. It is driven
+headless as well — `plan.straight_section`, `plan.add_record`,
+`bpy.ops.esp.build()`, whose `execute` blocks in the background. Its traps:
+
+- **Repair the mesh first.** On a mesh that is not watertight the cut goes
+  through and the socket is cut, but **the pin silently fails to weld**: the
+  boolean union fails and the addon says nothing. Check by the part's extent
+  along the cut normal — it must exceed the pin length. A part whose bounding
+  box equals the pin cylinder, with the cut-off piece gone, is a failed weld.
+- **Its pin is symmetric**: it grows as far into the part as it protrudes out of
+  it. On a figurine that punches through the wall into a cavity — a fist around
+  a cigar, the shaft of a boot. Ray-test first: a ring of points at the pin
+  radius at depths 0.1…h inside the original mesh. Where it does not hold, cut
+  with `add_pin=False` and graft a cylinder of your own — same protrusion,
+  insertion = the measured depth minus 0.2 mm.
+- It works on bare geometry and **loses the 3MF paint**; bring it back with
+  `paint_transfer.py`.
+
 ## The working cycle
 
 ```bash
