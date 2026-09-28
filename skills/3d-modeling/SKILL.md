@@ -176,6 +176,18 @@ The table is for a 0.4 nozzle; `hardware.json` says which one is installed.
 | free fit | 0.4 mm clearance | same |
 | snap fit, tight fit | 0.2 mm clearance | same |
 
+**A clearance in a moving joint is counted from the part's worst position, not
+from the nominal.** Add the play of its axle and the sag of the roof above it: a
+Ø4 axle in a Ø4.5 channel rises 0.25 mm on its own, and that much is gone from
+the gap before any support residue.
+
+**Supports inside a cavity are normal and are not designed around.** Residue
+lies where the support interface was — under overhanging faces — so widen the
+clearance **there only**, at the roof, not around the whole cavity. On a vertical
+wall a support stands against it without an interface and leaves next to nothing,
+while an inflated side gap is paid for in sideways travel: a 14 mm wheel in a
+15.6 mm slot wanders 0.8 mm and sits crooked.
+
 **Wall thickness rescales with the nozzle arithmetically. Fits and clearances
 do not** — they were derived by printing at 0.4 and are not a pure function of
 nozzle width. For a part that will print with another nozzle, **print a test
