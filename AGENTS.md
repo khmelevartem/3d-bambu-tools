@@ -120,6 +120,14 @@ runs it after this suite, and stops the push if either is red:
 git config hooks.extraRegress ../regress-mine.py
 ```
 
+A suite that takes minutes needs the push connection held open: it is opened
+before the hook runs and the remote closes it while the hook thinks, so the
+push fails after a green suite.
+
+```bash
+git config core.sshCommand "ssh -o ServerAliveInterval=30 -o ServerAliveCountMax=20"
+```
+
 ## Contributing
 
 In-code documentation states rules, thresholds and contracts. It does not carry
