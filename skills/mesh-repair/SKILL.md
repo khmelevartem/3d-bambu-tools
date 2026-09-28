@@ -127,6 +127,19 @@ The `fixtjoints.py` tolerance is in file units and is deliberately tight.
 **Do not widen it blindly** — past a narrow margin it stops meaning "a vertex
 on the edge" and starts meaning "a vertex nearby".
 
+**Repair in one pass, then compare — never stack passes.** Hole filling on a
+torn rim leaves slivers and T-seams; the next pass's degenerate-face cleanup
+opens fresh open edges, those get stitched in turn, and non-manifold edges
+accumulate. Run a single pass, take `BambuStudio --info` after it and after any
+further pass, and **keep the best result, not the last one**. Ranking:
+`manifold = yes` first, then fewer bodies, then fewer open edges — the slicer
+closes open edges by itself, non-manifold edges it does not.
+
+**A mesh torn by the slicer's own cut and split tools is not a broken
+original.** Editing geometry in the GUI leaves hundreds of three-face islands
+and thousands of open edges at an unchanged volume. Repair it as any torn mesh,
+and cut with the project's own tools instead.
+
 **Pointwise repair never cures a non-manifold edge.** Hole filling, vertex
 merging, normal recalculation and general-purpose mesh libraries have no such
 operation. Only a rebuild from the volume does, because the surface is then

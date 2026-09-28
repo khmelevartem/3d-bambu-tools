@@ -239,6 +239,33 @@ def _():
     close(num(chk, r"тел (\d+)\n", int), 1, 0, "тел после выброса мусора")
 
 
+@case("meshfix:второй проход нечего улучшать, а грани трогает", needs=("blender",))
+def _():
+    # правило скилла: один проход, потом сравнить и взять лучший результат,
+    # а не последний. Кейс держит первую половину: после чистого прохода
+    # повторный не улучшает ни одного числа, зато перестраивает геометрию.
+    d = work("meshfix-one-pass")
+    p1, p2 = d / "p1.stl", d / "p2.stl"
+    first = run([TOOLS / "meshfix.py", FIX / "broken.stl", "-o", p1,
+                 "--holes", "--normals", "--dropjunk"])
+    out = run([TOOLS / "meshfix.py", p1, "-o", p2,
+               "--holes", "--normals", "--dropjunk"])
+    contains(out, "дырки: открытых рёбер 0 -> 0", "тело одно, выбрасывать нечего")
+    a = run([TOOLS / "meshdoctor.py", p1], deps=NPSP)
+    b = run([TOOLS / "meshdoctor.py", p2], deps=NPSP)
+    for out_, who in ((a, "после одного прохода"), (b, "после двух")):
+        contains(out_, "ВЕРДИКТ: ЧИСТО")
+        close(num(out_, r"открытых рёбер \(дырки\): (\d+)", int), 0, 0, f"дырки {who}")
+        close(num(out_, r"non-manifold рёбер \(>=3 граней\): (\d+)", int), 0, 0,
+              f"non-manifold {who}")
+    close(num(b, r"объём ([\d.]+) мм³"), num(a, r"объём ([\d.]+) мм³"), 0.1,
+          "объём между проходами")
+    f1 = num(first, r"стало: (\d+) граней", int)
+    f2 = num(out, r"стало: (\d+) граней", int)
+    assert f1 != f2, (f"второй проход перестраивает грани ({f1} -> {f2}); "
+                      "равенство значит, что кейс уже ничего не держит")
+
+
 @case("meshfix:--extract предупреждает, что покраска пропадёт", needs=("blender",))
 def _():
     d = work("meshfix-extract")
