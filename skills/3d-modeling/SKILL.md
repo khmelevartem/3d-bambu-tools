@@ -107,8 +107,9 @@ python3 tools/gcode_report.py work/out/plate_1.gcode
    half of all geometry errors are visible only that way.
 4. Does the answer claim anything only a slice knows — supports, grams, hours?
    If it does, **the file that will be printed** was sliced, not an STL lying
-   next to it, and the last line of `gcode_report.py` was read. If it does not,
-   there is nothing here to slice.
+   next to it, and the last line of `gcode_report.py` was read. Claiming nothing
+   of the sort is a valid answer at this stage: handing over geometry is not
+   handing over a print.
 5. Any number that came from `slice.sh` is named as the CLI's. The person
    slices in the GUI, with the presets selected there, and that is the number
    they will print by; presenting the CLI's as final misstates it.
@@ -141,9 +142,12 @@ grams by line type from the `; FEATURE:` markers and ends with a plain
 supports-yes/no line. `slice.sh` calls it; for a foreign slice, call it by
 hand.
 
-- **Always name the number** — "supports 0.6 g, 2 min", or "no supports, no
-  overhangs steeper than the threshold remain". Silence about supports is read
-  as "all fine".
+- **Say it when there is news in it**: supports appeared, they went away after
+  an edit, they sit where no hand reaches, or their cost changes the decision.
+  A line reporting zero supports on a part the stock profile would never support
+  anyway says nothing and reads as boasting. **The one place supports are
+  reported without being asked is the final preparation of a file for
+  printing** — skill **print-tuning**, its checklist.
 - On a foreign model, read the `Description` inside the 3MF: authors often
   state where supports are needed.
 - Compare the slice of a rework against the slice of the original — the same

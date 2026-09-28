@@ -234,7 +234,10 @@ for such parts are in **3mf-paint**, `references/split-to-parts.md`.
 3. Grams and hours named in both directions, with flushing on its own line.
 4. Blockers named first, with the note that the printer and profile are
    switched by hand.
-5. Supports stated plainly — present or not, and how many grams.
+5. Supports stated plainly — present or not, and how many grams. **This is
+   the one place in the whole route where supports are reported whether or
+   not they were asked about**: a file is going to print. Earlier stages say
+   something about supports only when there is news in it.
 6. If a colour is being dropped, a render of what disappears.
 7. Experiment files in `work/`; only the final project next to the model, and
    that said out loud.
