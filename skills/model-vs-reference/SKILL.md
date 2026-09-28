@@ -70,6 +70,24 @@ silhouette of the head, which does not depend on small features; if the
 silhouette itself was reworked, fit by something known to be untouched with
 `--scale/--cx/--cy`.
 
+**Scale by a distance between two features, not by the width of a body part.**
+Interpupillary distance works: pupils and brows are dark patches, segmented by a
+threshold in a second, while the matching vertices in the mesh show up as a jump
+in depth along a profile. Normalising by the width of the head is wrong whenever
+the head itself was generated or reworked — normalising by the head and by the
+eyes then give opposite answers.
+
+**A bounding box and an area do not tell size from shape.** A feature can agree
+with the picture to a percent in both width and area and still read as twice as
+massive. What separates them is the **silhouette profile by columns** — the top
+and the bottom of the silhouette for every x. Measure the edges, not the box.
+
+**Local notches are what read as character.** After the height agrees, compare
+the shape of each edge along the profile: a rim that rises in a wedge towards
+the centre, a dip under a feature. A model whose upper rim matches to a tenth of
+a millimetre can still be wrong, and the whole difference sits in those breaks of
+the contour.
+
 **Apply the project's transform before measuring.** In a 3MF project the mesh
 sits in its own units and the matrix in `<build><item transform=…>` converts it
 to millimetres. Without it every millimetre is wrong. `refcompare.py` applies
