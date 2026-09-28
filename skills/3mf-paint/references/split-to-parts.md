@@ -141,6 +141,16 @@ cross-section at the cut face plus the glue, so even 0.5 mm of burial is
 serviceable; say the number out loud rather than pretending the fit is
 unchanged.
 
+### A cut-off part returns on a sleeve, not on a flat face
+
+Cutting a part flush and seating it on a boss of 0.30 mm is not a joint: a rim
+of fractions of a millimetre neither holds nor positions anything, it only marks
+the place. Build the cutter cylinder as **the part plus a sleeve continuation**,
+and put a blind socket on the same axis in the mating body. The sleeve length
+comes from the part's own size — about 3 mm at Ø4. The diameter is limited not
+by the part but by **the mating body's wall at its narrowest point**: measure it
+with sections parallel to the cut plane before choosing it.
+
 ## When the colour comes from overlapping bodies
 
 A model may be coloured not with the brush but as several overlapping bodies,
