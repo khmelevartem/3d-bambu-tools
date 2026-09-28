@@ -66,6 +66,37 @@ there is then no pair of adjacent faces of different colours anywhere. Such a
 plane has to be derived — and **named out loud as a derivation, not as a
 measurement.**
 
+### When no primitive fits, restore the base body
+
+A colour lying on the surface as an applied layer — hair on a head, a patch on a
+limb — has no plane and no cylinder around it. **Do not cut along its painted
+contour.** Where the surface runs parallel to the withdrawal direction, a
+contour wobble of 0.3 mm moves the cut wall by centimetres, and the part comes
+out with fins and with flakes of the neighbour's zone on it.
+
+Cut with the **base body the layer sits on**: the lower part is that restored
+body, the upper part is everything lying on it as a layer. A cut by a body
+crosses the surface almost everywhere, so the rim is defined.
+
+How the body is built:
+
+1. a centre inside the body, and a radial function `R(u)` sampled on an
+   icosphere (subdivision 6, about 41 thousand directions);
+2. a superquadric `|x/A|^p + |y/B|^p + |z/C|^p = 1` fitted to the lower zone as
+   the base;
+3. a biharmonic correction driven by the lower zone's own data;
+4. two clamps: `R` ≥ the radius of its own zone, so nothing of the part is lost,
+   and `R` ≤ the smallest radius of the neighbour's zone, so nothing of the
+   neighbour is taken. **The second clamp wins** — a neighbour's colour on the
+   part is worse than one's own colour given to the neighbour.
+
+**A boss of the base body stays with the base body** — an ear, a brow ridge, a
+heel. Cutting it off to follow the colour is the worse trade: a badly cut part
+and its seam show more than a wrongly coloured millimetre.
+
+**The clearance pocket is a Minkowski sum with a ball, not a radial offset.** On
+the vertical wall of a boss a radial offset gives no clearance at all.
+
 ### Choosing the seam plane when the colour border is the seam
 
 A limb usually gives several closed borders between the two filaments, and the
