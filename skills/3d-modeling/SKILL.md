@@ -27,6 +27,7 @@ references. A finished result may be put next to the model, but say so.
 | a feature on a foreign model is cut off: a strap, a handle | [graft a piece](references/foreign-3mf.md) |
 | rework a downloaded project | [reworking a foreign 3MF](references/foreign-3mf.md) |
 | a figurine, a statuette, an animal | [figurines](references/figurines.md) |
+| change the proportions or move a sculpted feature on a finished mesh | [editing a finished mesh](references/sculpt-edits.md) |
 | what to change so it prints faster and cheaper | skill **print-tuning** |
 | does it still look like the reference picture | skill **model-vs-reference** |
 | weight, time, supports | `./tools/slice.sh --supports part.stl` |
@@ -250,4 +251,5 @@ are in [references/bambu-cli.md](references/bambu-cli.md).
 - [references/figurines.md](references/figurines.md)
 - [references/foreign-3mf.md](references/foreign-3mf.md)
 - [references/mesh-measuring.md](references/mesh-measuring.md)
+- [references/sculpt-edits.md](references/sculpt-edits.md)
 - [references/surface.md](references/surface.md)

@@ -96,6 +96,11 @@ too small.
 vertices leaves salt-and-pepper and tears the normals even on a mesh of a
 million vertices.
 
+**The edit itself belongs to another skill.** This one measures; moving the
+vertices afterwards — a rigid shift above the neck, a band remapped per column,
+a feature slid along its base surface — is in **3d-modeling**,
+[editing a finished mesh](../3d-modeling/references/sculpt-edits.md).
+
 ## Checks before handing over
 
 1. Silhouette agreement is stated. Without it the numbers mean nothing.
