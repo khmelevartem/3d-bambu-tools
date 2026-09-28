@@ -91,6 +91,35 @@ no alternative.
 hand before pointing a script at it, and never overwrite a file the person is
 editing without checking its modification time first.
 
+## The regression suite
+
+`tests/` runs every tool against generated fixtures and asserts on what came
+out, not on the exit code.
+
+```bash
+python3 tests/run.py                # everything
+python3 tests/run.py --only=paint   # cases whose name contains "paint"
+```
+
+**A new tool gets its case in the same commit.** A tool with no case at all
+fails the suite; how to write one is in [tests/README.md](tests/README.md).
+A missing Bambu Studio or Blender is a skip, not a failure.
+
+`hooks/pre-push` runs the suite before every push. The hook path is a local
+setting, so it does not arrive with a clone — install it once, per checkout:
+
+```bash
+git config core.hooksPath hooks
+```
+
+A project built on these tools usually has checks of its own that cannot live
+here — over real models, over a private configuration. Name one and the hook
+runs it after this suite, and stops the push if either is red:
+
+```bash
+git config hooks.extraRegress ../regress-mine.py
+```
+
 ## Contributing
 
 In-code documentation states rules, thresholds and contracts. It does not carry
