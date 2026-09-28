@@ -6,6 +6,15 @@
 # A missing Bambu Studio or Blender is a skip, not a failure, so the hook
 # works on a machine with neither. To push past a red suite — a work in
 # progress on a branch, a fix for the test itself — set SKIP_REGRESS=1.
+#
+# A project built on these tools may keep a suite of its own that cannot ship
+# here — tests over real models, over a private configuration. Editing a tool
+# is exactly what such a suite is there to catch, so point the hook at it and
+# it runs after this one:
+#
+#     git config hooks.extraRegress ../regress-mine.py
+#
+# The path is a local setting and stays out of this repository.
 set -e
 
 if [ -n "${SKIP_REGRESS:-}" ]; then
@@ -14,11 +23,26 @@ if [ -n "${SKIP_REGRESS:-}" ]; then
 fi
 
 ROOT="$(git rev-parse --show-toplevel)"
+rc=0
+
 echo "pre-push: регресс $ROOT/tests"
-if python3 "$ROOT/tests/run.py"; then
-    exit 0
+python3 "$ROOT/tests/run.py" || rc=1
+
+EXTRA="$(git config --get hooks.extraRegress || true)"
+if [ -n "$EXTRA" ]; then
+    case "$EXTRA" in /*) ;; *) EXTRA="$ROOT/$EXTRA" ;; esac
+    if [ -f "$EXTRA" ]; then
+        echo "pre-push: набор проекта $EXTRA"
+        python3 "$EXTRA" || rc=1
+    else
+        echo "pre-push: hooks.extraRegress указывает на $EXTRA — файла нет"
+        rc=1
+    fi
 fi
-echo
-echo "pre-push: регресс красный — push остановлен."
-echo "Починить, либо SKIP_REGRESS=1 git push, если тест и есть то, что чинится."
-exit 1
+
+if [ "$rc" -ne 0 ]; then
+    echo
+    echo "pre-push: регресс красный — push остановлен."
+    echo "Починить, либо SKIP_REGRESS=1 git push, если тест и есть то, что чинится."
+fi
+exit "$rc"
