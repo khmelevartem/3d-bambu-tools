@@ -12,7 +12,7 @@ agent can drive them.
 
 **Facts**
 
-- 30 tools, 5 skills, 115 regression cases.
+- 30 tools, 5 skills, a regression case for every tool.
 - **Bambu Studio optional.** Only `slice.sh` needs it. Mesh, paint, split,
   measure: no slicer, no printer → [docs/without-a-printer.md](docs/without-a-printer.md)
 - Blender needed by 3 tools. Free, separate install.
