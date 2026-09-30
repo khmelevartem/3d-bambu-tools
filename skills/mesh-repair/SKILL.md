@@ -107,6 +107,14 @@ around a tenth of the original face count it grows by one or two per cent, and
 it keeps growing as the mesh gets coarser. Thin for file size and for the
 running time of the other tools, not for the print.
 
+**A part that mates with another part is thinned with `--strict`.** On sharp
+cut planes and sockets the fast engine welds T-seams and splits shells, and a
+mesh that was closed comes back open — the report says so. The strict engine
+refuses any collapse that would change the topology; it is an order of
+magnitude slower and, on such a part, also the more accurate of the two. Check
+the fit afterwards by cross-sections rather than by the bounding box: a socket
+diameter is what a clearance is spent on.
+
 **Thin before painting.** A collapse renumbers every triangle and the paint is
 bound to that numbering. On a project already painted the route is
 `meshfix.py --extract`, this tool, `meshfix.py --put`, then `paint_transfer.py`.

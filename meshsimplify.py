@@ -24,6 +24,12 @@ tolerance: the stock A1 process carries resolution = 0.012 mm, so detail finer
 than that is discarded inside Bambu Studio anyway. Push further only when the file size or
 the running time of the other tools is what hurts.
 
+**A part that mates with another part is thinned with `--strict`.** The fast
+engine welds T-seams and splits shells on sharp cut planes and sockets, and a
+mesh that was closed comes back open; the report says so when it happens. The
+strict engine refuses any collapse that changes the topology, and on such a
+part it is also the more accurate of the two.
+
 What this does NOT do: it does not smooth. Quadric edge collapse keeps
 curvature, including any bumps the generator put there. Generator meshes are in
 fact smooth - the triangle count is tesselation, not noise - so there is
@@ -34,6 +40,7 @@ job and a separate filter.
     python3 tools/meshsimplify.py in.stl -o out.stl         # tolerance = layer / 20
     python3 tools/meshsimplify.py in.stl -o out.stl --tol 0.02
     python3 tools/meshsimplify.py in.stl -o out.stl --faces 100000
+    python3 tools/meshsimplify.py part.stl -o out.stl --strict   # a part that mates
 
 Paint does not survive: a collapse renumbers every triangle. Thin the mesh
 before painting it. For a project that is already painted, the route is
@@ -44,7 +51,7 @@ import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import hardware
-from meshdoctor import read_any, weld, SCALE_WARN, SCALE
+from meshdoctor import read_any, weld, analyse, SCALE_WARN, SCALE
 from paint_transfer import point_tri_dist2
 
 
@@ -156,7 +163,31 @@ def deviation(V0, F0, V1, F1, nsample, rng, far_mm):
 
 # ---------- the search ----------
 
-def thin(V, F, target):
+def thin(V, F, target, strict=False):
+    """Collapse down to `target` faces.
+
+        Two engines, because they fail differently. The default is quadric
+        collapse from fast_simplification: a second per two million faces, and
+        on an organic body the topology survives. On a part with sharp cut
+        planes and a socket - anything meant to mate with another part - it
+        readily welds a T-seam or splits a shell, and the result is no longer
+        closed. `strict` switches to MeshLab's collapse with preserveTopology,
+        which refuses any collapse that would change the topology; it is an
+        order of magnitude slower and lands a slightly closer surface.
+    """
+    if strict:
+        import tempfile, os as _os, pymeshlab as ml
+        d = tempfile.mkdtemp()
+        src, dst = _os.path.join(d, "in.stl"), _os.path.join(d, "out.stl")
+        write_stl(src, V, F)
+        ms = ml.MeshSet(); ms.load_new_mesh(src)
+        ms.apply_filter('meshing_decimation_quadric_edge_collapse',
+                        targetfacenum=int(target), preserveboundary=True,
+                        preservenormal=True, preservetopology=True,
+                        planarquadric=True, autoclean=True, qualitythr=0.3)
+        ms.save_current_mesh(dst)
+        _, V2, F2, _ = read_any(dst)[0]
+        return weld(V2, F2, 1e-6 * float(np.ptp(V2, axis=0).max()))
     import fast_simplification
     v2, f2 = fast_simplification.simplify(np.asarray(V, np.float32),
                                           np.asarray(F, np.int32),
@@ -167,7 +198,7 @@ def thin(V, F, target):
 FAR_SHARE = 0.01          # % of the surface allowed past one strand width
 
 
-def search(V, F, tol, far_mm, nsample, rng, log, unit=1.0):
+def search(V, F, tol, far_mm, nsample, rng, log, unit=1.0, strict=False):
     """The fewest faces whose p99 deviation still fits the tolerance.
 
         Both tests have to pass: the surface within the tolerance, and
@@ -184,7 +215,7 @@ def search(V, F, tol, far_mm, nsample, rng, log, unit=1.0):
         mid = int(round((lo * hi) ** 0.5))
         if mid <= lo or mid >= hi:
             break
-        Vt, Ft = thin(V, F, mid)
+        Vt, Ft = thin(V, F, mid, strict)
         d = deviation(V, F, Vt, Ft, nsample, rng, far_mm)
         fits = d["p99"] <= tol and d["far"] <= FAR_SHARE
         log(f"  проба {len(Ft):>9d} гр. -> 99 % в {d['p99'] * unit:.4f} мм, "
@@ -248,6 +279,9 @@ def main():
     ap.add_argument("-o", "--out", help="куда записать STL; без него — только отчёт")
     ap.add_argument("--tol", type=float, help="допуск на отклонение поверхности, мм (по умолчанию слой/20)")
     ap.add_argument("--faces", type=int, help="сразу столько граней, без подбора по допуску")
+    ap.add_argument("--strict", action="store_true",
+                    help="не менять топологию: медленнее, но сетка остаётся замкнутой — "
+                         "для деталей с посадками")
     ap.add_argument("--samples", type=int, default=60000, help="точек на замер отклонения (60000)")
     ap.add_argument("--seed", type=int, default=0)
     a = ap.parse_args()
@@ -268,8 +302,19 @@ def main():
     # has no connectivity at all. In 3MF, OBJ and OFF the indices are the
     # author's, and welding there stitches separate sheets into edges that were
     # never in the file.
+    #
+    # Exact first, tolerance only if that leaves the mesh open - the same order
+    # meshdoctor uses. A tolerance merge on a mesh that was already closed
+    # invents non-manifold edges, the collapse then runs on that damaged
+    # connectivity, and the part comes out torn through no fault of the engine.
     if not indexed:
-        V, F = weld(V, F, 1e-6 * float(np.ptp(V, axis=0).max()))
+        uniq, inv = np.unique(V, axis=0, return_inverse=True)
+        Ve, Fe = uniq, inv.reshape(-1)[F]
+        re = analyse(Ve, Fe, 1e-9)
+        if re.get("empty") or (re["open_edges"] == 0 and re["nonmanifold_edges"] == 0):
+            V, F = Ve, Fe
+        else:
+            V, F = weld(V, F, 1e-6 * float(np.ptp(V, axis=0).max()))
     ext = np.ptp(V, axis=0) * k
     A, B, C = V[F[:, 0]], V[F[:, 1]], V[F[:, 2]]
     edge = np.median(np.linalg.norm(np.concatenate([B - A, C - B, A - C]), axis=1)) * k
@@ -294,9 +339,9 @@ def main():
     rng = np.random.default_rng(a.seed)
     t0 = time.time()
     if a.faces:
-        Vn, Fn = thin(V, F, a.faces)
+        Vn, Fn = thin(V, F, a.faces, a.strict)
     else:
-        got = search(V, F, tol / k, lw / k, min(a.samples, 20000), rng, print, k)
+        got = search(V, F, tol / k, lw / k, min(a.samples, 20000), rng, print, k, a.strict)
         if got is None:
             print(f"\nдопуск {tol:g} мм не достигается прореживанием — сетка уже на пределе, "
                   f"оставить как есть")
@@ -316,9 +361,20 @@ def main():
     v0, v1 = volume(V, F) * k ** 3, volume(Vn, Fn) * k ** 3
     print(f"  объём {v1:.1f} мм³, было {v0:.1f}"
           + (f" — разница {abs(v1 - v0) / abs(v0) * 100:.2f} %" if v0 else ""))
-    o0, o1 = open_edges(F), open_edges(Fn)
-    print(f"  открытых рёбер было {human(o0)}, стало {human(o1)}"
-          + (" — прореживание добавило дыр" if o1 > o0 else ""))
+    tol_w = max(1e-6 * float(np.linalg.norm(np.ptp(V, axis=0))), 1e-9)
+    r0, r1 = analyse(V, F, tol_w), analyse(Vn, Fn, tol_w)
+    o0, o1 = r0["open_edges"], r1["open_edges"]
+    print(f"  открытых рёбер было {human(o0)}, стало {human(o1)}")
+    worse = [(name, r0[key], r1[key]) for name, key in
+             (("открытых рёбер", "open_edges"), ("non-manifold рёбер", "nonmanifold_edges"),
+              ("вырожденных граней", "degenerate"), ("дублей граней", "duplicate_faces"),
+              ("отдельных тел", "bodies_separate"))
+             if r1[key] > r0[key]]
+    if worse:
+        print("  !! прореживание порвало топологию: "
+              + ", ".join(f"{n} {a} -> {b}" for n, a, b in worse))
+        if not a.strict:
+            print("     деталь с посадками так печатать нельзя — повторить с --strict")
     if d["max"] > max(4 * d["p99"], lw / 2):
         why = ("это края дыр, а не потеря формы: схлопнутую дыру не с чем сравнить"
                if o0 else "исходная сетка замкнута, так что это съеденная мелочь — посмотреть глазами")

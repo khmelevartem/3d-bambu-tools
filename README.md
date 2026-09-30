@@ -76,7 +76,7 @@ Details: [docs/layout.md](docs/layout.md) — dependencies, preset names,
 | `weldmesh.py` | weld vertices, close unwrap seams, keep paint |
 | `fixtjoints.py` | un-bake the T-joints the Bambu brush leaves; keeps paint |
 | `meshsolid.py` | rebuild a torn mesh as a solid by winding number |
-| `meshsimplify.py` | thin a generator mesh to a millimetre tolerance — fewer triangles, same shape |
+| `meshsimplify.py` | thin a generator mesh to a millimetre tolerance — fewer triangles, same shape; `--strict` keeps the topology for a mating part |
 | `writeverts.py` | move vertices without renumbering faces — reshape, keep paint |
 
 **Solid editing, splitting into parts.**

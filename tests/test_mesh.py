@@ -525,3 +525,49 @@ def _():
     out = run([TOOLS / "meshsimplify.py", painted(d, fine)], deps=SIMP)
     close(num(out, r"было ([\d.]+)"), 14135.3, 1.0, "объём исходника из 3MF")
     contains(out, "ничего не записано")
+
+
+# Шайба: тело вращения с отверстием и плоскими торцами — то, на чём быстрый
+# движок спотыкается, а строгий проходит.
+WASHER_PY = '''
+import sys
+import trimesh
+m = trimesh.creation.annulus(r_min=1.3, r_max=4.0, height=2.0, sections=256)
+for _ in range(3):
+    m = m.subdivide()
+m.merge_vertices()
+m.export(sys.argv[1])
+print(f"граней {len(m.faces)}, объём {m.volume:.1f}")
+'''
+
+STRICT = ("numpy", "scipy", "fast-simplification", "pymeshlab")
+
+
+@case("meshsimplify:--strict доходит там, где быстрый движок упирается",
+      tools=("meshsimplify.py",))
+def _():
+    d = work("meshsimplify-strict")
+    w = d / "washer.stl"
+    run([script(d, "washer.py", WASHER_PY), w], deps=TRI)
+    fast = run([TOOLS / "meshsimplify.py", w, "--faces", "4000", "-o", d / "f.stl"],
+               deps=SIMP)
+    strict = run([TOOLS / "meshsimplify.py", w, "--faces", "4000", "--strict",
+                  "-o", d / "s.stl"], deps=STRICT)
+    nf = num(fast, r"результат: ([\d ]+) гран", lambda s: int(s.replace(" ", "")))
+    ns = num(strict, r"результат: ([\d ]+) гран", lambda s: int(s.replace(" ", "")))
+    assert ns < nf / 10, f"строгий режим должен доходить до цели: быстрый {nf}, строгий {ns}"
+    close(ns, 4000, 60, "число граней в строгом режиме")
+    close(num(strict, r"объём ([\d.]+) мм³"), 89.9, 0.3, "объём после строгого прореживания")
+    assert num(strict, r"не дальше ([\d.]+) мм") < num(fast, r"не дальше ([\d.]+) мм"), \
+        "на теле вращения строгий режим обязан быть точнее быстрого"
+
+
+@case("meshsimplify:на чистой сетке о топологии не жалуется", tools=("meshsimplify.py",))
+def _():
+    d = work("meshsimplify-intact")
+    fine = d / "fine.stl"
+    run([script(d, "fine.py", FINE_PY), fine], deps=TRI)
+    out = run([TOOLS / "meshsimplify.py", fine, "--faces", "5000", "-o", d / "t.stl"],
+              deps=SIMP)
+    assert "порвало топологию" not in out, f"ложная жалоба на топологию:\n{out}"
+    contains(out, "открытых рёбер было 0, стало 0")
