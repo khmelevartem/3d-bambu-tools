@@ -75,40 +75,57 @@ def tri_radius(V, F):
                      np.linalg.norm(C - cen, axis=1).max()))
 
 
-def dist_to_mesh(P, V, F, tree, k=16, refine_above=None, chunk=200000):
+def dist_to_mesh(P, V, F, tree, k=16, refine_above=None, wide=128, chunk=200000):
     """Distance from each point to the nearest triangle, not to the nearest centroid.
 
         The k nearest centroids are only a first guess, and on a mesh whose
         triangles differ in size by two orders of magnitude - which a collapse
         always produces - the true nearest face is regularly not among them. The
-        guess is therefore an upper bound, and every point above `refine_above`
-        is redone exactly: all centroids within d + the largest centroid-to-vertex
-        radius, which provably cannot miss a closer face. Without this pass the
-        rare large values are the error of the search, not a loss of shape, and a
-        tolerance read off them stops the thinning far too early.
+        guess is therefore an upper bound, and without a second pass the rare
+        large values are the error of the search rather than a loss of shape,
+        so a tolerance read off them stops the thinning far too early.
+
+        The refinement is in two steps, and both stay vectorised. Points above
+        `refine_above` are redone against `wide` centroids at once; a point is
+        then provably correct when the distance to the furthest of those
+        centroids already exceeds d plus the largest centroid-to-vertex radius,
+        because no centroid beyond it can carry a closer face. Only the few
+        points that fail that test get an exact radius query. A per-point radius
+        query for every suspect instead - the obvious way to write this - costs
+        minutes once the mesh is coarse enough for a third of the samples to be
+        suspects.
     """
     A, B, C = V[F[:, 0]], V[F[:, 1]], V[F[:, 2]]
-    out = np.empty(len(P))
-    for lo in range(0, len(P), chunk):
-        hi = min(lo + chunk, len(P))
-        Q = P[lo:hi]
-        _, cand = tree.query(Q, k=min(k, len(F)))
-        cand = np.atleast_2d(cand)
+
+    def probe(Q, kk):
+        dc, cand = tree.query(Q, k=min(kk, len(F)))
+        cand, dc = np.atleast_2d(cand), np.atleast_2d(dc)
         best = np.full(len(Q), np.inf)
         for j in range(cand.shape[1]):
             c = cand[:, j]
             best = np.minimum(best, point_tri_dist2(Q, A[c], B[c], C[c]))
-        out[lo:hi] = np.sqrt(best)
+        return np.sqrt(best), dc[:, -1]
 
-    if refine_above is not None:
-        slack = tri_radius(V, F)
-        idx = np.nonzero(out > refine_above)[0]
-        for i in idx[:50000]:
-            c = np.fromiter(tree.query_ball_point(P[i], out[i] + slack), dtype=np.int64)
-            if len(c) == 0:
-                continue
-            Q = np.repeat(P[i][None, :], len(c), axis=0)
-            out[i] = float(np.sqrt(point_tri_dist2(Q, A[c], B[c], C[c]).min()))
+    out = np.empty(len(P))
+    for lo in range(0, len(P), chunk):
+        hi = min(lo + chunk, len(P))
+        out[lo:hi], _ = probe(P[lo:hi], k)
+
+    if refine_above is None:
+        return out
+    slack = tri_radius(V, F)
+    idx = np.nonzero(out > refine_above)[0]
+    if not len(idx):
+        return out
+    d2, far = probe(P[idx], wide)
+    out[idx] = np.minimum(out[idx], d2)
+    left = idx[far < d2 + slack]            # the wide ring may still hide a closer face
+    for i in left[:20000]:
+        c = np.fromiter(tree.query_ball_point(P[i], out[i] + slack), dtype=np.int64)
+        if len(c) == 0:
+            continue
+        Q = np.repeat(P[i][None, :], len(c), axis=0)
+        out[i] = float(np.sqrt(point_tri_dist2(Q, A[c], B[c], C[c]).min()))
     return out
 
 
