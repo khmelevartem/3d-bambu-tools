@@ -23,6 +23,31 @@ each half; the pin is a separate body, or grafted onto one half.
 **Use a rectangular cross-section, never round.** A round pin leaves the parts
 free to rotate about it.
 
+### A joint that turns
+
+When the part is *meant* to turn — a head, a limb, a lid — invert that rule:
+a round pin along the axis of rotation, and the fit loosened to about 0.25 mm
+per side rather than 0.10. Three more things decide whether it turns or wobbles.
+
+**Leave slack at the floor of the socket.** Size the socket deeper than the pin
+protrudes, by 0.3-0.5 mm. With the two equal, the pin touches the floor in the
+same instant the faces meet, and the part ends up hanging on the pin instead of
+resting on the collar around it, where it wobbles. In EasySlice this is
+`tip_extra`; it defaults to zero, so it has to be asked for.
+
+**Put the seam under an overhang, not on a silhouette line.** A part that turns
+carries its seam to every angle, so a seam on a visible line is visible from
+somewhere. Under an overhang - the underside of a head that juts out past the
+shoulders - it stays hidden through the whole rotation.
+
+**Measure the travel; do not assume it is free.** Rotate the part's sections
+about the axis in 2 degree steps and take the smallest gap to every other part
+at each angle, excluding points within the pin radius or the pin itself answers
+every time. A neighbouring raised arm may leave only a sector free, and that
+sector is the honest answer to give. Check the assembly the same way: lift the
+part along the axis in steps and confirm the clearance grows monotonically, or
+it cannot be put on at all.
+
 **A prismatic inlay in a pocket**, where the colour lies as a patch on the
 surface. Outside it is the model's original surface; inwards it runs as a
 **strictly prismatic** side wall with a flat bottom, and the mating part
@@ -97,6 +122,289 @@ and its seam show more than a wrongly coloured millimetre.
 **The clearance pocket is a Minkowski sum with a ball, not a radial offset.** On
 the vertical wall of a boss a radial offset gives no clearance at all.
 
+### A body of revolution restores both sides at once
+
+Furniture under a figure — a stool, a base, a post — is almost always a solid of
+revolution, and whatever stands on it is fused into it. Do not trace the line of
+fusion. Sample the profile `R(z)` **only in the angular sectors the neighbour
+does not reach**, rebuild the solid from it, and the dents the neighbour pressed
+into it are simply absent: the part comes out smooth without any repair step.
+The neighbour is then the original mesh minus that same solid, offset by the
+clearance. Both surfaces come from the same numbers, so they cannot disagree.
+
+**A profile `R(z)` is only meaningful where the section is a single loop.**
+Look at the horizontal section before sampling anything: a footrest ring on
+spokes shows three separate outlines at that height — the post and two arcs of
+the rod — and a percentile of radius merges them into a solid disc. The part
+then passes every mesh check and still is not the thing that was there. Where
+the section has several loops, fit each element on its own: the ring as a torus
+about its own axis, each spoke as a cylinder along its own direction, and union
+them. Fit the spoke direction by sweeping the angle and keeping the one that
+makes its cross-section roundest — principal-component axes are useless on a
+piece that is barely longer than it is thick.
+
+**The axis may move with height.** Elements that look coaxial often are not — a
+footrest ring can sit most of a millimetre off the post it hangs on. Fit a
+circle per layer and filter the centres with a **median**, never a mean: the
+centre steps by that millimetre at the ring's edge, and an averaging window
+smears the step over its whole width, which throws the radius out by millimetres
+on the layers next to it.
+
+**Take the profile near the top of the spread, not at its median.** A moulded
+base is round to about a tenth of a millimetre, and a median profile leaves the
+high side of it outside the cutter: the difference comes back as shells a
+hundredth of a millimetre thick.
+
+**Cut the neighbour with the restored part itself, inflated by the clearance —
+not with a primitive that merely covers it.** A cylinder thrown over a ring is
+larger than the ring everywhere else, and it takes a wedge out of the sole with
+a vertical wall and a step where its rim crosses the shoe. The restored ring
+subtracts only where the shoe actually pressed in — tenths of a millimetre —
+and leaves a pad of exactly that footprint. That pad is still a dent in the
+neighbour, so decide first who keeps the shared material: see *When the two
+parts share the same material* below.
+
+**Inflate the cutter along vertex normals, not by scaling the radius.** On a
+nearly horizontal surface a radial offset barely moves the surface along its
+normal, and the subtraction leaves shells a hundredth of a millimetre thick.
+
+**Judge boolean debris by volume, not by area.** The shells left along a nearly
+tangent surface carry thousands of faces and tens of square millimetres while
+their volume is a hundredth of a cubic millimetre; an area threshold keeps them
+and a volume threshold does not. Set it in absolute units — a few cubic
+millimetres — so that genuine small bodies belonging to the model survive it.
+
+### A prop fused into a hand is not in the mesh at all
+
+A microphone in a fist, a bottle in a grip, a hilt in a palm: the sculpt is one
+surface, and the prop **has no surface where the hand covers it**. There is
+nothing to cut there. The giveaway is in the paint — the prop's colour patch
+comes apart into two components, one each side of the hand.
+
+Measure it and build it again as a solid of revolution. That gives a part with
+no boolean debris on it at all, and a channel in the hand that is an exact
+cylinder instead of a cast of a sculpted gap.
+
+**Fit the axis on two features at once, never on the visible one alone.** Only
+a few millimetres of bare shaft usually show, and a direction fitted on that
+short lever is wrong by several degrees — on an overhang ten times as long it
+throws the head's centre a couple of millimetres off the axis, and the rebuilt
+prop comes out bent. Fit the shaft cylinder and the head sphere together, with
+the sphere's centre constrained to lie **on** the cylinder's axis.
+
+**Take the profile as a median per slice, over faces interior to the colour
+patch.** The patch's boundary faces are the fillet running into the finger and
+read as much as a millimetre too large; a maximum or a high percentile builds
+that fillet into the part. Fill the slices the hand hides by interpolating
+between the exposed ends. Check the rebuild against the sculpt by radius: a few
+hundredths of a millimetre through the middle of the distribution is the sign
+that the profile is right.
+
+**The channel is the monotone envelope of the profile, not the profile.** A
+shaft that widens towards the head — they nearly all do — jams in a channel
+that copies it one to one: the fat end has to pass the narrow start. Bore
+`radius(t) = max(r(u), u <= t) + clearance` and the part slides the whole way
+with exactly the clearance. The price is a slightly loose fit deep in the
+channel, which is under the fingers and invisible.
+
+**Work out how the part goes in before cutting anything.** Three routes, and
+usually only one is open: sideways out of the groove needs the fingers to open
+a full 180 degrees, which a grip never does; in from the tail needs the head to
+pass the shaft's channel, which it never does; so it goes in from the head end,
+down the channel. Say how far it travels, and check the clearance at every step
+of that travel rather than at the seated position only.
+
+**Expect a small float and measure it instead of assuming a stop.** The part
+seats when its collar meets the rim of the hand, which is rarely the sculpted
+position: a couple of tenths of a millimetre deeper is normal, repeatable, and
+cheaper to state than to remove — removing it means adding a shoulder to the
+part, and that changes the silhouette.
+
+**Check what else stands near the axis before extending the cutter past the
+part.** The cutter has to run out beyond both ends of the prop, and a wrist pin
+or a neighbouring finger can sit inside that extension. Measure the distance
+from the cutter's axis to the pin's axis along the pin's whole length, and
+compare the mating face's area before and after: it must not change at all.
+
+### A raised strap: interpolate the garment under it
+
+A tie, a belt, a strap lying on a body is a zone that stands proud of the
+surface along part of its length and hangs clear of it along the rest. Neither
+a plane nor an offset of its own face gives the back of that part. **The back
+is the surface underneath, continued across the zone.**
+
+Parametrise the body as `r(angle, height)` about an axis through it, take the
+zone as a region in that plane, and solve Laplace's equation for `r` inside the
+region with the surrounding surface as the boundary value. Weight the stencil
+by the real spacing — `dz` one way, `r·dtheta` the other — or the solution
+leans along the finer axis.
+
+**The floor under that surface has to be a fraction of a line width, not a
+millimetre.** A minimum-thickness clamp is what puts a strap-shaped trench in
+the garment: wherever the strap's true standoff is less than the floor, the
+floor wins and the cutter digs a groove the strap never touched. There are no
+shirts with a slot cut for the tie. Clamp at about 0.25 mm — under half a
+0.4 nozzle line — and the base garment keeps a continuous surface, with a real
+recess only where the part genuinely presses into it, such as under a knot.
+Never clamp from above at all: where the strap lifts clear of the body, its
+true standoff is the answer.
+
+**Put the one pin where a recess already exists.** A pin halfway along a strap
+that merely lies on the garment is a hole punched in sound material. The knot,
+the buckle, the boss — wherever the part already cuts into the body's geometry —
+is the only place a socket costs nothing.
+
+**Where the zone tucks under a lapel or a flap, its own border is not boundary
+data.** The flap stands further out than the zone, and interpolating from it
+drives the reconstructed surface outside the part, giving negative thickness.
+Feed that band from the trustworthy neighbours instead — the zone above and the
+garment below — and substitute the radius of the body underneath, taken from
+wherever that body is exposed.
+
+### The cutter is a bounded shell, and its outer face belongs in the air
+
+Cutting such a zone with an open wedge takes whatever the wedge reaches at a
+larger radius — a thigh in front of a hanging strap, a collar over a neck. Bound
+the cutter outside as well as inside.
+
+Choose that outer bound from the **air gap**, not from a fixed offset: cast the
+ray past the zone, find the next entry into the solid, and put the face at about
+half of that gap while keeping a clear margin below it. Measure the gap from the
+raw sampled radius raised by a local maximum, never from a smoothed one — a
+smoothed surface sits below the real one, and the real one then reads as the
+obstacle. A face laid a few hundredths of a millimetre off a surface it is
+parallel to perforates the part: it weaves in and out and leaves a sieve.
+
+**Do not make the cutter's grid finer than the model's own triangles.** A
+cutter meshed an order finer shreds the boolean into hundreds of edges with
+three faces. A step of about the model's edge length leaves none, and its
+staircase on the contour is then visible instead, so **smooth the positions of
+the boundary nodes** rather than refining the grid: a dozen Laplacian passes
+over the nodes that lie on the mask's border, moving them in the parameter
+plane, take the steps out and drop the residual genus with them.
+
+**When the cutter's outer face is forced within a fraction of a millimetre of a
+neighbouring surface, stop cutting and move vertices instead.** A patch of skin
+under an overhanging lapel leaves no room for an outer face, and the boolean
+returns a sieve. Build the part from the model's own faces: copy the zone,
+displace its vertices inward, and close it with a reversed copy plus a rim wall.
+Measured on the same figure — the tie, whose side wall is nearly radial, came
+out genus 3 with a cutter and 41 % of its faces self-intersecting by
+displacement; the neck patch under the lapel came out genus 41 by cutter and
+genus 0 by displacement. The zone decides which tool, not preference.
+
+**Displace along the surface normal, not along the radius**, and **taper the
+depth to zero at the zone's border** over about a millimetre of geodesic
+distance. A radial offset collapses a near-radial side wall; a full-depth step
+across one triangle stands faces on edge and they overlap.
+
+### Mould pins into the cutter's inner face
+
+Welding a separate cylinder onto a cut part with UNION leaves a ring of pinches
+along the seam, as a socket drilled across a kerf does. Sink the pin into the
+cutter instead: lower the cutter's inner surface by the pin's length inside a
+disc, and the pin comes out carved from the part's own material, with no second
+boolean. The socket cutter gets the same disc, deeper by the floor slack and
+wider by the fit.
+
+### One cutter for both parts, or the pocket must contain the part
+
+Prefer **one cutter for both sides of the seam**: cut the part with it and the
+body with the same one, so the two mate with no designed clearance at all and
+are located by the pin and held by glue. A strap on a garment has nowhere to put
+a clearance anyway — the gap would read as a groove around the part.
+
+When a clearance is genuinely needed, two cutters — an exact one for the part, a
+grown one for the pocket — only give it if the grown one **contains** the exact
+one everywhere. One boolean
+checks it: `exact − grown` must be empty. It is broken by every shortcut:
+
+* deriving the grown radii from the same field but averaging over a wider mask,
+  which lifts the floor;
+* a mask cleanup that drops a cell the exact mask had — keep the union;
+* blending two neighbouring zones in one coarse cell — take the extremes, not
+  the mean;
+* applying two grown cutters one after the other, which re-cuts a surface the
+  first one already made. Cut one pocket with one cutter for both parts.
+
+Grow the floor by the depth clearance and the outline by one grid cell, and
+leave the outer face alone: it is in the air already, and growing it drives it
+into whatever lies beyond.
+
+**Two parts seated in the same pocket need a gap between them too** — at least
+one cell of the cutter's grid. Sharing a face means the printed parts fight for
+the same space.
+
+### Splitting along the colour border, and why the patch is not free
+
+Selecting one filament's faces and capping the holes divides the mesh exactly:
+the two volumes add back up to the original. The capping is where it goes wrong.
+
+**Do not recompute the winding of the halves.** In a generated figure a limb
+usually enters the torso by interpenetration; once half the faces are taken
+away, a normals-recalculate reads that limb as a cavity and turns it inside
+out — hundreds of wrongly wound edges and a volume short by a quarter. Inherit
+the winding from the source mesh and build each patch triangle from the
+neighbouring face's own traversal: for a boundary edge that runs v0→v1 inside
+its one remaining face, add the triangle [v1, v0, centroid].
+
+**A fan patch loops forever on a pinhole.** Where the two colours meet at a
+point, the new face lands on top of an existing one, the edge gains a third
+face, removing it reopens the hole, and the count never changes. Weld the
+vertices of such a boundary instead, with a threshold growing from 0.02 to
+0.45 mm — the holes are tenths of a millimetre across and the welding costs
+a fraction of a cubic millimetre.
+
+**A long, non-convex border makes a fan patch a sail.** Where a trouser leg
+lies against a post for several millimetres of height, the fan spans the gap as
+a flat membrane: a blade sticking out of the sole on one part and a fin
+standing off the post on the other. **Use the mesh library's own hole fill
+instead of a fan** — it triangulates inside the border and invents no centroid,
+and the two halves then add back up to the original volume exactly.
+
+**Relax a large patch; a bare fill is a faceted pit.** A colour border wanders
+around its own mean plane by a few tenths of a millimetre, and a fill that only
+triangulates the border reproduces that saw. Subdivide the patch a couple of
+times with grid fill, then run a Laplacian smooth a few dozen times with the
+border vertices pinned: the patch becomes a taut membrane, which is what the
+underside of a heel or a sole should look like. The membrane sags by a few
+cubic millimetres — check the sum of the halves against the original and say so.
+
+**Under the contact patch neither part has a surface of its own.** Where the
+two colours meet, the source is one lump of material and the border is the weld
+line; whatever fills the hole is invented, and the only real choice is which
+part gets it.
+
+### When the two parts share the same material
+
+Along a contact the two bodies of the source interpenetrate — a sole grazing a
+footrest bar overlaps it by a few tenths of a millimetre. Both parts cannot
+keep it. Give it to the part whose surface is seen and shaped (a sole, a face,
+a painted panel), and move the other one away.
+
+**Measure the overlap before choosing how to move.** Sample the keeping part's
+surface, evaluate the signed depth inside the other part's restored profile,
+and take the maximum, not the median: the median is a fraction of the worst.
+
+**Moving a ring inward is not the same as thinning it.** Which direction helps
+follows from where around the section the overlap sits. A sole that grazes the
+upper-outer shoulder of a bar is cleared by thinning and lowering; pulling the
+ring towards its own axis drives the bar into whatever stands on the inner
+side, and there is usually something. Search the two or three parameters
+together against the measured surface instead of guessing one.
+
+**Take the contact zone out of the neighbour's cutter.** The keeping part owns
+everything there, so there is nothing to cut, while the cutter's own clearance
+would carve the dent straight back and set the gap from below. Subtract the
+zone from the cutter and the gap is then set only by how far the other part was
+moved — which can be a few hundredths of a millimetre, so the two still read as
+touching on the finished figure.
+
+**A strut has to end on the axis of the ring it joins.** Its length was chosen
+against the original section; thin the ring and the tip comes out through the
+skin as a spike. Solve for the length instead of keeping the old number: it is
+the distance from the strut's own origin to the ring's centre circle.
+
 ### Choosing the seam plane when the colour border is the seam
 
 A limb usually gives several closed borders between the two filaments, and the
@@ -115,6 +423,17 @@ Check this before the pins, never after: a vertical pin into the base plus a
 horizontal pin into a neighbour would require inserting the part in two
 directions at once. Moving a pin to another face of the joint fixes it for
 nothing; re-cutting afterwards does not.
+
+## Drill the socket into the thick part, grow the pin on the thin one
+
+Which half carries which is a free choice, and on a limb the wall decides it.
+A wrist tapers: measure with rays across the axis, stepping along it to the
+full socket depth, and a wall that is 2.3 mm at the cut can be 1.3 mm three
+millimetres in. A socket there breaks through. A pin there only adds material,
+because a symmetric pin grows inward as much as it protrudes, and the forearm
+behind the cut holds a steady 2.9-3.2 mm and takes the socket without
+complaint. The symptom of having it backwards is not an obvious hole — it is
+degenerate faces and shells touching along the cylinder.
 
 ## A pin is as deep inside the part as it is long outside it
 
@@ -346,6 +665,35 @@ headless as well — `plan.straight_section`, `plan.add_record`,
   insertion = the measured depth minus 0.2 mm.
 - It works on bare geometry and **loses the 3MF paint**; bring it back with
   `paint_transfer.py`.
+- **Clean the mesh before writing it out, and judge it on the file, not in the
+  scene.** The pin and the socket are cylinders that cross the plane of the
+  kerf, and the solver leaves zero-area triangles and pairs of vertices a
+  hundredth of a micron apart along that rim. In the scene they are harmless -
+  connectivity is stored as indices and every edge still has two faces - but
+  STL stores coordinates, and the slicer welds by them: those pairs merge and
+  become non-manifold edges. `remove_doubles` at 1e-4 followed by
+  `dissolve_degenerate` removes them and changes no shape. Run the mesh check
+  on the exported file; a clean scene proves nothing.
+
+**Drive its engine, not its operators, when the cut has to be exact.** The
+viewport operators are modal - they want a line dragged by hand. `core.cutting`
+takes the same job as numbers and runs anywhere: build a `ContactSpec` from an
+explicit patch of vertices and faces plus `connectors.connector_matrix(centre,
+direction, diameter, protrusion)`, wrap it in a `CutSpec` with `gap`,
+`clearance`, `tip_extra` and `pin_side`, then `split_mesh` and
+`apply_connectors`. `pin_side` names the half on the **+ side of the patch
+normal**; the other half gets the socket.
+
+**The patch is finite, and that is the point.** The cutter is the patch offset
+by half the kerf either way, so it removes material only where the patch
+reaches. A limb pressed against the part being cut - a raised arm beside a neck
+- survives a cut that would otherwise take it, as long as the patch stops short
+of it. Find the height where the two stop being one cross-section, and end the
+patch in the gap between them, with about a millimetre of margin on each side.
+Past its own rim the patch cuts nothing, so it may end in mid-air. What it must
+still do is overrun the cross-section it is meant to divide, on every other
+side, or the halves stay joined and the addon says the cut did not split the
+part.
 
 ## The working cycle
 
@@ -451,6 +799,14 @@ touching the paint, applies to very few seams in practice. Kept as a fallback.
 
 ## Traps
 
+**Pick the check that fits the seam.** A boolean lies where the parts share a
+face: it answers a negative intersection, or a part's whole volume. Ray voting
+lies where a part's face hangs in the air in front of the body: the parity
+through a mesh of hundreds of thousands of faces breaks and reports a vertex
+buried millimetres deep where a boolean finds nothing. Parts pressed face to
+face are judged by volume balance and by point sampling; parts held apart by a
+clearance are judged by the boolean.
+
 **Never measure a wall as the distance to the nearest vertex.** On a seated
 figure the nearest vertex to a wrist axis can be a coat flap rather than the
 sleeve wall. Measure with rays across the axis: a ray from inside hits its own
@@ -485,6 +841,43 @@ below a square millimetre to their neighbour, the same way speckle is handled.
 
 **Measure the socket floor across the whole section, not on the axis.** The
 surface above the rim of a socket is closer than the surface above its centre.
+
+**A volume that grew by exactly the operand's volume means the solver found no
+intersection.** A pin unioned to a post should add only the part that sticks
+out; if it adds the whole cylinder, the pin is hanging in a cavity. Generated
+posts are often hollow — a cone-shaped funnel a few millimetres deep under the
+seat, with a wall half a millimetre thick. Fill it with a cylinder before
+placing the pin, and compare the increment with the expected one every time.
+
+**Another model's part can sit inside the post, in its own cavity.** It belongs
+to the other colour, so the colour split hands it to the other part, and the
+cutter does not reach it because the cavity is missing from the cutter too.
+Clear the interior with a cylinder along the post's axis, offset by the
+clearance, and check afterwards that no vertex of one part lies inside the
+other's outline.
+
+**An intersection equal to a whole part's volume is the solver giving up, not
+an overlap.** The same run then reports a union equal to the other part. Answer
+the question with rays instead — five directions through a BVH, majority vote,
+a couple of thousand sampled vertices — and report that count, not the boolean.
+
+**When the exact solver returns an empty mesh, try the manifold one.** On a
+large generated mesh `EXACT` silently yields nothing — or a union that merely
+concatenates the shells — while the same operands run correctly through
+`MANIFOLD`. Verify the cutter on a cube first: if it subtracts there, the fault
+is in the input mesh, not in the tool, and changing its size will not help.
+
+**A flap hanging off one non-manifold edge is not a separate body.** Walk the
+faces through edges and it belongs to the main shell, so a by-volume cull keeps
+it, and three faces of it are all that is left of the report's open edges. Group
+the faces through edges that have exactly two faces, and drop the groups that
+are both tiny and thin.
+
+**A pinch vertex survives the STL.** The manifold solver leaves single points
+where two fans meet — typically around the root of a pin standing on a cut
+plane — and the Euler characteristic comes out odd. Running the mesh through
+the solver again separates them, but STL identifies vertices by coordinate and
+they merge back on write. Move each of them a micron along its own normal.
 
 **A part must not stick out of the body it came from.** Sample its vertices
 and take the signed distance to the original mesh: anything positive outside is
