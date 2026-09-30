@@ -46,6 +46,7 @@ uv run --quiet --with numpy --with scipy --with trimesh python tools/paint.py â€
 | `numpy` (+`scipy`) | most of the paint and mesh tools |
 | `trimesh` | `balljoint.py`, `figcheck.py`, `make_multicolor_3mf.py` |
 | `shapely`, `scikit-image` | `solid_cut.py`, `meshsolid.py` |
+| `fast-simplification` | `meshsimplify.py` |
 | `Pillow` | `refcompare.py` |
 | Blender installed as an application | `meshfix.py`, `pivot_joint.py`, `solid_cut.py` |
 | Bambu Studio installed | `slice.sh`, `resolve_profile.py`, `figopt.py` |

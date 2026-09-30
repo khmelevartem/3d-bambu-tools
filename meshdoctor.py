@@ -47,6 +47,7 @@ def read_stl(path):
 
 
 SCALE_WARN = {}          # label -> the <build> scale note, see _build_scales
+SCALE = {}               # label -> that scale as a number, for tools that work in millimetres
 
 
 def _uniform_scale(t):
@@ -134,6 +135,7 @@ def read_3mf(path):
                             if obj.get('name'):
                                 label += f" «{obj.get('name')}»"
                             k = scales.get((name, obj.get('id')))
+                            SCALE[label] = 1.0 if k is None else k
                             if k is not None and abs(k - 1) > 1e-6:
                                 SCALE_WARN[label] = (
                                     f"!! сетка в своих единицах: <build> масштабирует её в {k:.4g} раза. "

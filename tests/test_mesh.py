@@ -465,3 +465,63 @@ def _():
     # и без -o по-прежнему рядом с исходником
     run([TOOLS / "meshfix.py", src, "--extract"])
     assert sorted(src.parent.glob("*__obj*.stl")), "без -o STL рядом с исходником не появился"
+
+
+# ------------------------------------------------------------------ meshsimplify
+
+# Сфера, натесселированная мельче нитки: 81920 граней при радиусе 15 — ребро 0.28 мм.
+FINE_PY = '''
+import sys
+import trimesh
+m = trimesh.creation.icosphere(subdivisions=6, radius=15.0)
+m.apply_translation([0, 0, 15.0])
+m.export(sys.argv[1])
+print(f"граней {len(m.faces)}, объём {m.volume:.1f}")
+'''
+
+SIMP = ("numpy", "scipy", "fast-simplification")
+
+
+@case("meshsimplify:густая сфера худеет, объём на месте",
+      tools=("meshsimplify.py",))
+def _():
+    d = work("meshsimplify-ball")
+    fine = d / "fine.stl"
+    run([script(d, "fine.py", FINE_PY), fine], deps=TRI)
+    out = run([TOOLS / "meshsimplify.py", fine, "-o", d / "thin.stl"], deps=SIMP)
+    faces = num(out, r"результат: ([\d ]+) гран", lambda s: int(s.replace(" ", "")))
+    assert faces < 12000, f"сфера должна сжаться минимум всемеро, вышло {faces} граней"
+    close(num(out, r"объём ([\d.]+) мм³"), 14135.3, 60.0, "объём после прореживания")
+    contains(out, "дальше нитки 0.42 мм ушло 0.000 %")
+    assert num(out, r"не дальше ([\d.]+) мм") <= 0.01, "допуск не выдержан"
+    assert (d / "thin.stl").exists(), "STL не записан"
+
+
+@case("meshsimplify:крупной сетке прореживание не нужно", tools=("meshsimplify.py",))
+def _():
+    d = work("meshsimplify-coarse")
+    out = run([TOOLS / "meshsimplify.py", FIX / "ball.stl"], deps=SIMP)
+    contains(out, "крупнее нитки", "прореживать нечего", "ничего не записано")
+
+
+@case("meshsimplify:--faces задаёт число граней прямо", tools=("meshsimplify.py",))
+def _():
+    d = work("meshsimplify-faces")
+    fine = d / "fine.stl"
+    run([script(d, "fine.py", FINE_PY), fine], deps=TRI)
+    out = run([TOOLS / "meshsimplify.py", fine, "--faces", "5000", "-o", d / "t.stl"],
+              deps=SIMP)
+    faces = num(out, r"результат: ([\d ]+) гран", lambda s: int(s.replace(" ", "")))
+    close(faces, 5000, 60, "число граней по --faces")
+    assert "проба" not in out, "с --faces подбор не должен запускаться"
+
+
+@case("meshsimplify:3MF читается своими индексами, объём в миллиметрах",
+      tools=("meshsimplify.py",))
+def _():
+    d = work("meshsimplify-3mf")
+    fine = d / "fine.stl"
+    run([script(d, "fine.py", FINE_PY), fine], deps=TRI)
+    out = run([TOOLS / "meshsimplify.py", painted(d, fine)], deps=SIMP)
+    close(num(out, r"было ([\d.]+)"), 14135.3, 1.0, "объём исходника из 3MF")
+    contains(out, "ничего не записано")

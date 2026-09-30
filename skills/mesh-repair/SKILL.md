@@ -1,6 +1,6 @@
 ---
 name: mesh-repair
-description: Repair a broken mesh before printing — holes, non-manifold edges, reversed faces, degenerate triangles, junk islands, bodies merely touching instead of merged. Use when Bambu Studio complains on import about "non-manifold edges" or "reversed faces detected, which may affect rendering" and suggests a third-party repair tool, when a downloaded model will not slice or slices strangely, when crumbs appear next to the part in the preview, or when a mesh stopped being closed after boolean operations, voxel sculpting or an edit in Blender. Triggers — non-manifold, reversed faces, holes in the model, watertight, manifold, negative volume, STL repair, voxel remesh, meshdoctor, meshfix; non-manifold, дырки в модели, ремонт STL, битая сетка, слайсер ругается на сетку, крошки рядом с деталью, модель не режется, вывернутые грани, отрицательный объём, «после Blender сетка перестала быть замкнутой», булевы операции, воксельная лепка, watertight, manifold, почини сетку.
+description: Repair a broken mesh before printing — holes, non-manifold edges, reversed faces, degenerate triangles, junk islands, bodies merely touching instead of merged. Also thin a mesh that carries far more triangles than the nozzle can print — the million-triangle output of an image-to-3D generator. Use when Bambu Studio complains on import about "non-manifold edges" or "reversed faces detected, which may affect rendering" and suggests a third-party repair tool, when a downloaded model will not slice or slices strangely, when crumbs appear next to the part in the preview, or when a mesh stopped being closed after boolean operations, voxel sculpting or an edit in Blender. Triggers — non-manifold, reversed faces, holes in the model, watertight, manifold, negative volume, STL repair, voxel remesh, meshdoctor, meshfix, too many triangles, simplify a mesh, decimate, reduce polygon count, lighten a generated model; non-manifold, дырки в модели, ремонт STL, битая сетка, слайсер ругается на сетку, крошки рядом с деталью, модель не режется, вывернутые грани, отрицательный объём, «после Blender сетка перестала быть замкнутой», булевы операции, воксельная лепка, watertight, manifold, почини сетку, слишком много треугольников, упростить сетку, прорядить сетку, убрать лишние треугольники, уменьшить число полигонов, облегчить сгенерированную модель, файл модели огромный, сетка после нейросети.
 ---
 
 # Mesh repair
@@ -76,6 +76,49 @@ $UV tools/paint.py write  fixed.3mf work/final.npz ready.3mf
 
 5. `meshdoctor` and `BambuStudio --info` on the result. A volume matching the
    original proves the topology was fixed and the shape was not.
+
+## Too many triangles
+
+A mesh out of an image-to-3D generator carries one to three million triangles
+with an edge around 0.15 mm, against a 0.42 mm strand and a 0.20 mm layer.
+Three to nine triangles then fall inside one extruded line and the slicer
+averages them away.
+
+```bash
+uv run --quiet --with numpy --with scipy --with fast-simplification \
+    python tools/meshsimplify.py in.stl -o out.stl
+```
+
+**The target is a deviation in millimetres, never a percentage.** Ten per cent
+off a smooth ball is free; ten per cent off a face is a lost nose. The tool
+bisects on the face count, measuring each probe two ways, and stops at the
+default tolerance of a twentieth of the layer height.
+
+The default has a second, independent justification: the stock A1 process
+carries `resolution = 0.012` mm, the tolerance with which the slicer simplifies
+the contour itself. A mesh finer than that is thrown away inside Bambu Studio
+regardless.
+
+**Thinning is paid for in print time, not in plastic.** The slicer fits arcs
+(G2/G3) to a smooth contour and prints them at full speed; a contour of long
+straight chords is not recognised as an arc and the head decelerates at every
+corner. The plastic is identical to the hundredth of a gram, the time is not:
+around a tenth of the original face count it grows by one or two per cent, and
+it keeps growing as the mesh gets coarser. Thin for file size and for the
+running time of the other tools, not for the print.
+
+**Thin before painting.** A collapse renumbers every triangle and the paint is
+bound to that numbering. On a project already painted the route is
+`meshfix.py --extract`, this tool, `meshfix.py --put`, then `paint_transfer.py`.
+
+**A generator mesh is over-tesselated, not noisy.** Twenty Taubin passes move
+its vertices by hundredths of a millimetre, which is what a smooth surface
+does. Quadric collapse keeps curvature and does not straighten anything, so
+"make the shape cleaner" is not what this tool is for, and there is normally
+nothing to smooth.
+
+**Repair first, thin second.** On a mesh full of junk islands the collapse
+spends its budget on the junk.
 
 ## Defect classes
 
