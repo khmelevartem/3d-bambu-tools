@@ -25,7 +25,8 @@ Order of work
 Specification (JSON)
 --------------------
     {"src": "body.stl",
-     "parts": [{"name": "...", "out": "....stl", "src": "own_body.stl", "ops": [
+     "parts": [{"name": "...", "out": "....stl", "src": "own_body.stl",
+                "keep": "largest", "ops": [
          {"kind":"plane",  "n":[0,0,-1], "d":2.9647, "op":"INTERSECT"},
          {"kind":"cyl",    "axis":[0,0,1], "t0":-3.5, "t1":0.74, "r":3.1,
           "at":[0,0,0], "op":"DIFFERENCE"},
@@ -39,6 +40,13 @@ bodies each part is cut from its own. `plane` is the half-space n.x <= d.
 `at`. `region` is the intersection of several half-spaces as one body - a
 wedge, a slab. `mesh` is a cutter read from a file. Operations: INTERSECT,
 DIFFERENCE (a socket), UNION (a pin).
+
+`"keep": "largest"` drops everything but the biggest body of the result and
+says how much was dropped. A cut along a sharp step in the surface shears chips
+off it; they belong to neither side. **The counterpart is subtracted with the
+same cutter, not with the part** - subtracting a part whose chips were dropped
+puts them back touching the shell at a vertex, and the shell returns
+non-manifold.
 
 **Compute an assembly's union from meshes, not from rebuilt primitives.** A
 cutter cylinder and a mesh cylinder of different segment counts almost
@@ -177,6 +185,29 @@ def _copy(o):
     return d
 
 
+def _keep_largest(o):
+    """Leave the biggest body of o, delete the rest. Returns (count, volume)."""
+    bpy, _, _, _ = _bl()
+    bpy.ops.object.select_all(action='DESELECT')
+    o.select_set(True); bpy.context.view_layer.objects.active = o
+    bpy.ops.object.mode_set(mode='EDIT')
+    bpy.ops.mesh.select_all(action='SELECT')
+    bpy.ops.mesh.separate(type='LOOSE')
+    bpy.ops.object.mode_set(mode='OBJECT')
+    bodies = [b for b in bpy.context.selected_objects if b.type == 'MESH']
+    if len(bodies) < 2:
+        return 0, 0.0
+    vols = [(abs(_stats(b)[0]), b) for b in bodies]
+    vols.sort(key=lambda t: -t[0])
+    chips = vols[1:]
+    for _, b in chips:
+        bpy.data.objects.remove(b, do_unlink=True)
+    big = vols[0][1]
+    bpy.ops.object.select_all(action='DESELECT')
+    big.select_set(True); bpy.context.view_layer.objects.active = big
+    return len(chips), sum(v for v, _ in chips)
+
+
 def _combine(a, b, op):
     d, c = _copy(a), _copy(b)
     _boolean(d, c, op)
@@ -191,6 +222,10 @@ def do_cut(spec):
         o = _load(p.get('src') or spec['src'], p['name'])
         for c in p.get('ops', []):
             _boolean(o, _cutter(c), c['op'])
+        chips = (0, 0.0)
+        if p.get('keep') == 'largest':
+            chips = _keep_largest(o)
+            o = bpy.context.view_layer.objects.active
         v, op, nm = _stats(o)
         bpy.ops.object.select_all(action='DESELECT')
         o.select_set(True)
@@ -199,6 +234,9 @@ def do_cut(spec):
                               global_scale=1.0, apply_modifiers=True)
         print(f'  {p["name"]:24s} {v:10.3f} мм³  граней {len(o.data.polygons):5d}  '
               f'открытых рёбер {op}  non-manifold {nm}  -> {p["out"]}')
+        if chips[0]:
+            print(f'    выброшено осколков {chips[0]} на {chips[1]:.3f} мм³ — '
+                  f'дополнение режется тем же резаком, не этой деталью')
         if op or nm:
             print('    !! деталь не замкнута — резать так нельзя')
         out.append(v)

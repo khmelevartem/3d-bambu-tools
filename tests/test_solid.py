@@ -589,3 +589,76 @@ def _():
         ids = _re.findall(r'<object id="(\d+)"', z.read(entry).decode())
         dup = [k for k, v in _c.Counter(ids).items() if v > 1]
         assert not dup, f"{entry}: повторённые id объектов {dup}"
+
+
+@case("solid_cut:осколки реза выброшены, а дополнение режется тем же резаком",
+      needs=("blender",), tools=("solid_cut.py",))
+def _():
+    # Плоскость забирает одно тело целиком и состругивает с соседнего шапочку
+    # в 6 мм³. Шапочка не деталь и не мусор на детали: keep=largest её роняет,
+    # а дополнение считается тем же резаком — тогда шапочка остаётся в теле
+    # сама собой, и обе половины выходят замкнутыми.
+    d = work("solid_cut_осколки")
+    cut = {"kind": "plane", "n": [1, 0, 0], "d": 4.6}
+    out = run([TOOLS / "solid_cut.py", "cut",
+               spec(d / "s.json",
+                    {"src": str(FIX / "two_bodies.stl"),
+                     "parts": [
+                         {"name": "деталь", "out": str(d / "деталь.stl"),
+                          "keep": "largest",
+                          "ops": [dict(cut, op="INTERSECT")]},
+                         {"name": "остаток", "out": str(d / "остаток.stl"),
+                          "ops": [dict(cut, op="DIFFERENCE")]}]})])
+    close(num(out, r"деталь\s+([\d.]+) мм³"), 2072.09, 0.5, "объём детали")
+    close(num(out, r"выброшено осколков 1 на ([\d.]+) мм³"), 6.36, 0.2,
+          "объём выброшенного осколка")
+    contains(out, "открытых рёбер 0  non-manifold 0")
+    chk = run([TOOLS / "solid_cut.py", "check", FIX / "two_bodies.stl",
+               d / "деталь.stl", d / "остаток.stl"])
+    # недостача равна ровно выброшенному осколку, а не чему-то ещё
+    close(num(chk, r"недостача ([\d.]+) "), 6.36, 0.2, "недостача")
+    close(num(chk, r"×\s+\S+\s+(-?[\d.]+) мм³"), 0.0, 1e-3, "пересечение пары")
+    contains(chk, "ИТОГ: все пары чистые")
+
+
+@case("solid_cut:резак обходит столб и не подрезает его основание",
+      needs=("blender",), tools=("solid_cut.py",))
+def _():
+    # Шар со штифтом: клин срезается с макушки рядом со штифтом. Без выреза
+    # под штифт плоскости клина состругивают переднюю часть его основания —
+    # штифт остаётся стоять на части пятна. Вырез цилиндром радиусом штифта
+    # плюс кайма это снимает, и проверка обязана увидеть разницу.
+    d = work("solid_cut_столб")
+    run([TOOLS / "solid_cut.py", "cut",
+         spec(d / "s0.json",
+              {"src": str(FIX / "ball.stl"),
+               "parts": [{"name": "болванка", "out": str(d / "болванка.stl"),
+                          "ops": [{"kind": "cyl", "axis": [0, 0, 1], "at": [0, 0, 0],
+                                   "t0": 26, "t1": 40, "r": 4.0, "op": "UNION"}]}]})])
+    region = {"kind": "region", "planes": [[[0, 0, -1], -24], [[-1, 0, 0], -2]],
+              "op": "INTERSECT"}
+    collar = {"kind": "cyl", "axis": [0, 0, 1], "at": [0, 0, 0],
+              "t0": -1, "t1": 45, "r": 4.5, "op": "DIFFERENCE"}
+    out = run([TOOLS / "solid_cut.py", "cut",
+               spec(d / "s1.json",
+                    {"src": str(d / "болванка.stl"),
+                     "parts": [
+                         {"name": "столб", "out": str(d / "столб.stl"),
+                          "keep": "largest",
+                          "ops": [dict(collar, op="INTERSECT")]},
+                         {"name": "клин", "out": str(d / "клин.stl"),
+                          "keep": "largest", "ops": [region, collar]},
+                         {"name": "клин без выреза", "out": str(d / "клин2.stl"),
+                          "keep": "largest", "ops": [region]}]})])
+    close(num(out, r"клин\s+([\d.]+) мм³"), 447.11, 1.0, "объём клина с вырезом")
+    close(num(out, r"клин без выреза\s+([\d.]+) мм³"), 628.82, 1.0,
+          "объём клина без выреза")
+    good = run([TOOLS / "solid_cut.py", "check", d / "болванка.stl",
+                d / "столб.stl", d / "клин.stl"])
+    close(num(good, r"×\s+\S+\s+(-?[\d.]+) мм³"), 0.0, 1e-3, "клин против столба")
+    contains(good, "ИТОГ: все пары чистые")
+    bad = run([TOOLS / "solid_cut.py", "check", d / "болванка.stl",
+               d / "столб.stl", d / "клин2.stl"])
+    close(num(bad, r"×\s+\S+\s+([\d.]+) мм³"), 181.7, 2.0,
+          "сколько клина без выреза попадает в столб")
+    contains(bad, "ДЕТАЛИ ЛЕЗУТ ДРУГ В ДРУГА")

@@ -298,6 +298,55 @@ depth to zero at the zone's border** over about a millimetre of geodesic
 distance. A radial offset collapses a near-radial side wall; a full-depth step
 across one triangle stands faces on edge and they overlap.
 
+### A plane along a drawn edge sits on the edge, not beside it
+
+Where the seam follows a sharp step in the surface — the edge of a lapel, a
+collar, a raised strap — fit the cutting plane to that edge by least squares and
+put it **on** the edge. Standing it a tenth or two inside leaves a ribbon of the
+floor narrower than the nozzle line: it cannot print, and the boolean breaks it
+into slivers that read as a saw in the preview. Either the plane is on the edge,
+or it is further out than one line width — nothing in between.
+
+Fitting is worth doing on the real edge rather than on three points: sample the
+step at every slice by the largest jump of the surface along the sweep, drop the
+outliers, and refit. A residual of a few hundredths of a millimetre means the
+edge is straight enough for a plane; a residual approaching a tenth means the
+seam wants something other than a plane.
+
+The chips such a plane shears off the step are **dropped, not given to the
+part**: `"keep": "largest"` in the part's specification leaves the biggest body
+of the intersection and reports what it threw away.
+
+### Subtract the cutter, not the part
+
+The remainder is `source − cutter`, never `source − part`. The part is the
+largest body of `source ∩ cutter`; subtracting that body puts the chips back,
+touching the shell at a vertex instead of merging into it, and a tenth of a
+cubic millimetre of debris brings back non-manifold edges and a genus of several
+units. The cutter is a clean body, so the difference is clean, the chips stay in
+the remainder where they belong, and the two volumes add back up to within what
+was dropped — `check` reports that residual as the shortfall.
+
+**Collapse edges shorter than ~0.05 mm at the very end**, on both bodies. Every
+boolean leaves slivers along its cuts; welding the short edges takes them out
+without moving the surface, and the face count drops by a fifth or so. Check
+afterwards that the part still deviates from the source surface by microns.
+
+### A post standing where the cutter passes keeps its footing
+
+A neck, a peg, any post rising from the surface the cutter crosses: measure it
+first — centre, radius, the plane it stands on — and **subtract its own cylinder
+from the cutter**, over the full height, grown by a collar of about half a
+millimetre. Without that the cutter's back face shaves the front of the post's
+base, and the post is left standing on a part of its footprint. The back of the
+pocket then follows the cylinder instead of a plane, which also keeps the part
+thicker than a flat back face would at the same clearance.
+
+Take the cutter's top **above** the plane the post stands on, not level with it:
+level leaves a film of the original over the part, and that surface then prints
+in the body's filament instead of the part's. Verify by rays, not by eye — cast
+down over the part's footprint and check that nothing of the body is above it.
+
 ### Mould pins into the cutter's inner face
 
 Welding a separate cylinder onto a cut part with UNION leaves a ring of pinches
