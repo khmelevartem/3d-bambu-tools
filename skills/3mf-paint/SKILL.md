@@ -146,6 +146,44 @@ is ragged to begin with.
 
 ## Splitting into parts instead of changing filament
 
+### Principles — they outrank every recipe below and in the reference
+
+1. **Cut along real physical bodies, the way the thing would be assembled in
+   the real world.** A boot comes off a leg, an eye sits in a socket, a
+   microphone is held in a fist. Ask what the separate pieces would be if the
+   object were manufactured, and cut there — not wherever the paint happens to
+   change.
+2. **The seam is as smooth as the relief allows; the paint only advises.**
+   Paint on a generated or hand-brushed model is coarse and its border is
+   ragged. Leaving the painted border by a few lines for a seam that is
+   physically right and smoother is the correct trade, not a loss — name how
+   much colour moved, but do not keep a jagged seam to save it.
+3. **There are two kinds of cut, and every part is one of them.**
+   - **Surface and pin.** The mating surface need not be flat — it follows
+     the border — but it is smooth like a soap film: no steps, no creases, no
+     sharp changes of slope, so the printed parts differ from the model as
+     little as possible and seat against each other. Decide how each part
+     prints *before* placing the pin: when the cut is a plane that also serves
+     as the part's footing on the bed, make the pin a separate body and drill
+     blind sockets into both parts. **A part that must turn is cut on a plane**,
+     always.
+   - **Inlay.** Something small laid on top or set into a pocket — brows,
+     eyes, a badge. No pin. It needs a **flat bottom to print on**, so that its
+     side walls stand vertical and come out smooth for the pocket.
+4. **A simple body is rebuilt from geometry, not cut out of the mesh.** Round
+   eyes, a microphone as a solid of revolution, a cylindrical chair leg:
+   rebuilding them controls the shape exactly and removes the asymmetry that a
+   generated mesh almost always has. Fit the primitive to the mesh, show its
+   dimensions, then use it as both the part and the cutter.
+5. **One logical part per pass, then the human checks it.** Brows — check.
+   Eyes — check. Boots — check. Several coloured parts go in one pass only
+   when their assembly has to be designed together — teeth, tongue and palate
+   inside a mouth. **Never cut the whole model at once.** Each pass ends with
+   renders of the new parts and the remaining body, the cut surface and the
+   joint, and waits for the answer before the next part.
+
+### Tools
+
 ```bash
 $UV tools/paint_split.py plan   work/p.npz --scale S
 $UV tools/paint_split.py joints work/p.npz --scale S --plane-cut auto --emit work/joints.json

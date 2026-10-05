@@ -9,10 +9,17 @@ A lid against a lid holds nothing. Both are printed in layers, each has its own
 stepped surface, and glue lets them set a millimetre out of place. Only two
 joints work.
 
+**The principles in SKILL.md come first** — physical bodies, a smooth seam
+over faithful paint, surface-and-pin versus inlay, simple bodies rebuilt from
+geometry, one part per pass. Where a recipe below seems to disagree, the
+principles win.
+
 ## The two joints
 
-**A flat cut across the part, a blind socket in both halves, a pin.** The
-mating faces are plane against plane. The socket is a rectangular pocket in
+**A cut across the part, a blind socket in both halves, a pin.** The mating
+faces are plane against plane where the border allows a plane, and otherwise a
+smooth surface fitted to the border — a relaxed membrane with no steps or
+creases, never the capped paint contour itself. The socket is a rectangular pocket in
 each half; the pin is a separate body, or grafted onto one half.
 
 | Tolerance | Value | Why |
@@ -685,7 +692,7 @@ centres and depths and take the one with a real wall.
 | a separate shell | the colour occupies a whole mesh body | nothing — it is already a part |
 | a flat joint | the seam loop nearly lies in a plane | cut on that plane, socket both sides, pin |
 | a patch inlay | one loop, the piece faces one way | prismatic pocket |
-| "by colour" | the loop wanders, there is no plane | nothing straightens it, only glue — **name that price out loud** |
+| "by colour" | the loop wanders, there is no plane | do not cut along the loop: span it with a smooth relaxed surface, move the colour onto that surface, and pin across it |
 
 ## Choosing the cutting tool
 
@@ -772,8 +779,9 @@ whether a socketed joint is possible at all.
 ## Cutting on a plane instead of along the colour contour
 
 The mating surface of a colour-contour cut is a capped drawing, and a drawing
-need not be flat. Two wavy caps printed in layers do not meet: their steps
-differ and do not cancel.
+is ragged. Two ragged caps printed in layers do not meet: their steps differ
+and do not cancel. A curved surface is not the problem — a smooth one prints
+the same on both parts; the teeth of the drawing are.
 
 `--plane-cut` moves the seam onto its plane honestly — faces crossed by the
 plane are cut by it, and each piece takes the colour of its side. On a flat
@@ -783,9 +791,10 @@ Widening the strip (`--plane-margin`) does not help and makes things worse
 beyond a couple of millimetres: out there the seam runs where the surface is
 nearly tangent to the plane, and the intersection is ill-defined in itself.
 
-**A plane changes the author's drawing**, so `auto` converts only the seams
-that will carry a pin. Other flat seams gain nothing from a plane and would
-shift the colour for free.
+`auto` converts only the seams that will carry a pin. That is the reach of the
+switch, not a reason to keep a ragged seam elsewhere: a plane or a smooth
+surface moves the colour by a line or two, and that is the trade to take. Name
+how much area changed colour.
 
 ## How the socket is chosen
 
