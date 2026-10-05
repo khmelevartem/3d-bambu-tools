@@ -8,8 +8,10 @@ face and which coordinates lie under a given pixel.
 
     uv run --with numpy python tools/paintview.py render work/p.npz view.png \\
         --eye 0,-150,14 --target 0,-20,14 --fov 30 --size 1100x900
-    uv run --with numpy python tools/paintview.py pick work/p.npz 540,320
-    uv run --with numpy python tools/paintview.py grid work/p.npz
+    uv run --with numpy python tools/paintview.py pick work/p.npz \\
+        --eye 0,-150,14 --target 0,-20,14 --fov 30 --size 1100x900 --px 540,320 600,410
+    uv run --with numpy python tools/paintview.py grid work/p.npz \\
+        --eye 0,-150,14 --target 0,-20,14 --box 400,700,4 --rows 200,600,5
 
 Colours come from the project when `paint.py` saved them, otherwise from the
 notional palette below. Pure black is drawn as dark blue: on true black the
@@ -132,7 +134,18 @@ def pick(V, F, eye, target, fov, W, H, px, py):
     return int(i), o + t[i] * d
 
 
-def triple(s): return tuple(float(x) for x in s.split(','))
+def floats(n, what):
+    def parse(s):
+        try: v = tuple(float(x) for x in s.split(','))
+        except ValueError: v = ()
+        if len(v) != n: raise argparse.ArgumentTypeError(f'нужно {what}, получено {s!r}')
+        return v
+    parse.__name__ = what
+    return parse
+
+
+triple = floats(3, 'три числа через запятую')
+pair = floats(2, 'два числа через запятую: x,y пикселя')
 def size(s): return tuple(int(x) for x in s.lower().split('x'))
 
 
@@ -148,7 +161,7 @@ def main():
         q.add_argument('--target', type=triple, required=True)
         q.add_argument('--fov', type=float, default=30)
         q.add_argument('--size', type=size, default=(1100, 900))
-        if name == 'pick': q.add_argument('--px', type=triple, nargs='+', required=True)
+        if name == 'pick': q.add_argument('--px', type=pair, nargs='+', required=True)
         if name == 'grid':
             q.add_argument('--box', type=triple, required=True, help='x0,x1,кол-во колонок')
             q.add_argument('--rows', type=triple, required=True, help='y0,y1,кол-во строк')

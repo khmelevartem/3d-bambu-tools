@@ -312,6 +312,36 @@ def _():
     close(num(top, r"xyz \[\s*[-\d.]+\s+[-\d.]+\s+([\d.]+)\]"), 24.26, 0.2, "z верхней точки")
 
 
+@case("paintview:pick называет грань и точку под пикселем", tools=("paintview.py",))
+def _():
+    d = work("paintview_pick_xyz")
+    out = run([TOOLS / "paintview.py", "pick", ball_npz(d),
+               "--eye", "0,-150,15", "--target", "0,0,15", "--fov", "30",
+               "--size", "400x400", "--px", "185,140", "160,240"], deps=VIEW)
+    want = {"(185,140)": (1044, "бел", (-2.83, -9.37, 26.30)),
+            "(160,240)": (1137, "тело", (-7.47, -10.56, 7.53))}
+    for at, (face, name, xyz) in want.items():
+        line = next((l for l in out.splitlines() if l.strip().startswith(at)), None)
+        assert line, f"нет строки для {at}\n{out}"
+        assert f"грань {face} " in line and name in line, f"{at}: {line}"
+        got = [float(x) for x in line.split("[")[1].split("]")[0].split()]
+        for g, w, axis in zip(got, xyz, "xyz"):
+            close(g, w, 0.02, f"{at} {axis}")
+        r = sum((g - c) ** 2 for g, c in zip(got, (0, 0, 15))) ** 0.5
+        close(r, 15, 0.2, f"{at} расстояние до центра шара")
+
+
+@case("paintview:pick отказывает пикселю не из двух чисел", tools=("paintview.py",))
+def _():
+    d = work("paintview_pick_bad")
+    npz = ball_npz(d)
+    for bad in ("185,140,0", "185", "a,b"):
+        out = run([TOOLS / "paintview.py", "pick", npz, "--eye", "0,-150,15",
+                   "--target", "0,0,15", "--px", bad], deps=VIEW, expect=2)
+        contains(out, "нужно два числа через запятую")
+        assert "Traceback" not in out, f"--px {bad}: трейсбэк вместо ошибки\n{out}"
+
+
 @case("paintview:grid печатает таблицу промеров", tools=("paintview.py",))
 def _():
     d = work("paintview_grid")
