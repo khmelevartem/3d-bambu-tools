@@ -699,6 +699,63 @@ construction, and the sheet is both the floor and the side wall.
   each sheet sees the previous pockets as the rest's surface and keeps its
   margin from them.
 
+### A relief draped over the skin: prism on the attachment line
+
+A moustache, a lock of hair over a cheek, a collar lying on a neck: the relief
+rises from the skin and overhangs it. A prism over its **silhouette** along the
+extraction axis takes the skin in the relief's shadow along with it — a skin-
+coloured band on the part.
+
+- **Put the prism on the attachment line**, where the relief grows out of the
+  skin. Classify each column along the axis: the first hit is the relief, and
+  either the column leaves the relief into air before meeting skin (overhang)
+  or it does not (attached). The plug goes under the attached columns only.
+- **Keep the overhang on the part over its own air gap.** In overhang columns
+  the cutter's floor sits halfway between the relief's underside and the skin;
+  nothing is removed from the head there.
+- **Clip the plug outline by the silhouette with an outward margin, never
+  inward.** An inward clip puts the clearance ring under the relief, and the
+  ring bites a notch out of the visible edge.
+- **Shorten the plug at narrow ends, equally on both sides.** A full-depth
+  plug under a thin tip shows as a tall flat wall. Cut both tips back by the
+  same length from the end of the relief. Separate the tip relief beyond the
+  plug along the skin continued harmonically under it from a ring of skin
+  columns around. Report the colour this costs — the tip's thinnest edge stays
+  on the head.
+
+### A ring through a thin part: measure and rebuild as a body of revolution
+
+An ear tunnel, a nose ring, a grommet: the generator's ring is lumpy. Replace
+it with exact geometry.
+
+- **Axis**: the smallest eigenvector of the area-weighted normal matrix is the
+  first guess; refine it with a least-squares cylinder fit to the bore faces
+  only (normals pointing at the axis). The first guess alone tilts the profile.
+- **Profile**: plot radius against position along the axis, inward- and
+  outward-facing faces separately. A rounded lip is a torus tangent to the
+  bore: minor radius `(R_max − r_bore)/2`, major radius `r_bore + minor`.
+- **Before planning two pieces, look along the axis behind each lip.** A lip
+  pressed against the body has no room to be put on and cannot be seen
+  either: drop it, and make the ring one piece inserted from the free side.
+  Measure the free travel in front of the other lip, so the pocket gets a
+  sweep only where nothing is cut.
+- Pocket: tube plus 0.1 mm, lip torus plus 0.1 mm, and a cylinder of the lip's
+  outer radius swept out in the insertion direction.
+
+### Checking a body someone edited by hand
+
+A person's own correction comes back in the print pose and often open.
+
+- Map it back to the assembly frame with the inverse of the same transform
+  used for export, and diff the vertices: how many moved, how far, where.
+- Hand edits leave holes. Close them with `pymeshfix` and compare the volume
+  with the version before the edit — it should differ by the edit, not by the
+  hole.
+- Re-run the pairwise intersections and the removal sweeps against every
+  part. Overlaps of a thousandth of a cubic millimetre are the edit pushing
+  through a neighbour: subtract the neighbour from the body rather than moving
+  vertices back.
+
 ## Cut a zone, or leave it as a boss?
 
 An island zone has no choice — it is an inlay. When a zone **touches a body of
