@@ -30,6 +30,17 @@ threshold = atan( layer height / (line width / 2) )
 slowdown over overhangs and on part cooling. **For a display piece take the
 computed value.**
 
+**Raising the threshold above the computed one is paid for on the visible
+side.** Every degree of margin turns another band of wall into supported
+overhang, and the support leaves its marks there whether the wall needed it or
+not. Measure it as area, not as grams: take the faces a support would touch,
+intersect them with the faces that are exposed in the assembled figure, and
+compare. On one cut-out part at a 0.12 layer, going from a hand-set 40° back to
+the computed 30° cut the support landing on visible surface from 104 mm² to
+35 mm², and at 25° to 13 mm², while `Outer wall` did not move — so the surface
+itself was never touched and the saving is free. The margin belongs on the one
+part that drooped, as a per-object override, not on the whole project.
+
 ## Layer height
 
 The width of a step on the surface is `layer height / tan(angle to

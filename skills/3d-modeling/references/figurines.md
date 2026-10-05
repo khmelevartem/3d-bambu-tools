@@ -49,6 +49,35 @@ the contact patches**, and name the margin in millimetres.
 several separate islands that only connect higher up. Use `brim_type =
 outer_only`.
 
+## A part with no flat face has no orientation
+
+Before arguing about overhangs, sweep orientations and read the **area of the
+first layer**, not the overhang area. A part cut out of an organic figure along
+colour borders can have no flat face anywhere, and then every pose stands it on
+a point. Sweeping four dozen directions over a pair of cut-out trousers gave
+13 mm² at best — and that best pose had the part balancing on the two 3 mm pins
+that join it to the shirt. Thirty millimetres tall on that footprint, it tears
+off the plate, and the earlier attempt at a "flatter" pose resting on a heel
+was worse.
+
+Before cutting, strip the part down to what is really its own. Those 13 mm²
+were the two assembly pins; drilled out into blind sockets and reprinted as
+separate dowels, the same pose stands on 49 mm² of the part's own surface, and
+no mating face changes. Setting the pose exactly instead of 1.9° off doubles it
+again — a near-flat face meets the plate along a line, not over a patch.
+
+If that is still not enough, **cutting the part is not a workaround but the
+route**, and the cut pays twice: each half gains a real flat face. Choose the
+plane by what hides the seam, not by what is easy to compute — a horizontal
+plane through the part gave both halves 470 mm² of contact and buried half the
+seam ring inside a neighbouring part, where a plane down the middle leaves the
+seam running the whole length of the visible front.
+
+Report both numbers when handing a pose over: first-layer area at 0.1 mm and
+again a millimetre up. A dome that starts at 150 mm² and is past 500 mm² one
+millimetre later is safe with a brim; one that is still under 20 mm² at a
+millimetre is not.
+
 ## Matching the size of a bought figurine
 
 "Make them look proportionate" is **not solved by overall height**: figurines

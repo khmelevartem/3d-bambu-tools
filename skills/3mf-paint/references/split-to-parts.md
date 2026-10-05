@@ -33,8 +33,18 @@ free to rotate about it.
 ### A joint that turns
 
 When the part is *meant* to turn — a head, a limb, a lid — invert that rule:
-a round pin along the axis of rotation, and the fit loosened to about 0.25 mm
-per side rather than 0.10. Three more things decide whether it turns or wobbles.
+a round pin along the axis of rotation. **Loosen the fit to 0.10 mm per side
+and no further.** A joint that turns still has to hold the part where it was
+put. Measured on assembled figures: 0.25 per side lets a head on a 6 mm pin
+rock four degrees and the face swings a millimetre; 0.15 per side on a 2 mm
+wrist pin will not hold a raised hand at the height it was left; 0.10 per side
+on 3 and 4.5 mm shoulder pins turns freely and holds. Five more things decide
+whether it turns or wobbles.
+
+**A pin printed lying down comes out fatter, and that is luck, not design.**
+Its underside sags by about a tenth of a millimetre, which turns a loose fit
+into a good one and a good fit into a press. Stand the pin axis up so it prints
+at its real diameter, and set the fit by the number.
 
 **Leave slack at the floor of the socket.** Size the socket deeper than the pin
 protrudes, by 0.3-0.5 mm. With the two equal, the pin touches the floor in the
@@ -54,6 +64,14 @@ every time. A neighbouring raised arm may leave only a sector free, and that
 sector is the honest answer to give. Check the assembly the same way: lift the
 part along the axis in steps and confirm the clearance grows monotonically, or
 it cannot be put on at all.
+
+**A pin inside a slender column carries the whole bending moment.** A glued
+butt joint across a column holds only as well as the pin crossing it: a 3 mm
+pin of 3 mm diameter inside a 5.8 mm column snaps the first time the assembled
+piece is dropped. Spend the room on length before diameter — the glued cylinder
+is what carries the moment, while widening the pin eats the wall it is glued
+to. Make the pin at least as long as the column is wide and keep about a
+millimetre of wall around the socket.
 
 **A prismatic inlay in a pocket**, where the colour lies as a patch on the
 surface. Outside it is the model's original surface; inwards it runs as a
@@ -334,10 +352,15 @@ units. The cutter is a clean body, so the difference is clean, the chips stay in
 the remainder where they belong, and the two volumes add back up to within what
 was dropped — `check` reports that residual as the shortfall.
 
-**Collapse edges shorter than ~0.05 mm at the very end**, on both bodies. Every
-boolean leaves slivers along its cuts; welding the short edges takes them out
-without moving the surface, and the face count drops by a fifth or so. Check
-afterwards that the part still deviates from the source surface by microns.
+**Collapse edges shorter than ~0.05 mm at the very end — on the part, and on
+the remainder only along the cut.** Every boolean leaves slivers along its
+cuts; welding the short edges takes them out without moving the surface, and
+the face count drops by a fifth or so. A sculpted body has edges that short of
+its own: collapsed everywhere, a head loses a third of its faces and gains
+hundreds of non-manifold edges. On the remainder restrict the collapse to faces
+touching the new walls, or use the solver's own simplify with a tolerance of
+a few microns. Check afterwards that both bodies still deviate from the source
+surface by microns.
 
 ### A post standing where the cutter passes keeps its footing
 
@@ -392,6 +415,17 @@ one cell of the cutter's grid. Sharing a face means the printed parts fight for
 the same space.
 
 ### Splitting along the colour border, and why the patch is not free
+
+**Smooth the contour before cutting along it.** A generator's paint border
+wanders by tenths of a millimetre from one triangle to the next, and the cut
+inherits every tooth. The teeth are finer than the nozzle, so they print as
+fluff that has to be scraped off both parts before they will seat — and
+wherever the seam crosses a visible surface, the same teeth show as a step of
+two or three tenths: a hairline that looks sawn, a ridge down a sideburn, a
+bump on a cheek that reads as a modelling error rather than a seam. Smooth the
+contour until no excursion is smaller than one extrusion line, then cut. The
+smoothing moves nodes *along* the border, so the surface stays where it was —
+the same trick that takes the staircase out of a pocket wall.
 
 Selecting one filament's faces and capping the holes divides the mesh exactly:
 the two volumes add back up to the original. The capping is where it goes wrong.
@@ -583,6 +617,88 @@ uv run --with numpy --with scipy --with shapely --with mapbox_earcut \
        --filament 4 --scale 2 --out work/parts/stroke
 ```
 
+### Inlays inside a cavity
+
+Teeth, a tongue and the dark of a mouth; an ear canal; a nostril. Several
+inlays share one cavity, each with its own extraction direction, and they get
+in each other's way. Treat them as one assembly, not as separate inlays.
+
+- **Fix the insertion order first**, then cut in that order: part *k* is the
+  largest body of `head_{k-1} ∩ cutter_k`, and `head_k = head_{k-1} − pocket_k`.
+  Parts cut this way cannot overlap, and the volumes add back up.
+- **Visibility is judged on the head with the later pockets already cut.** A
+  zone hidden behind the lower teeth becomes visible once their pocket is
+  there; take the mask from a ray along `−d` whose first hit carries the zone's
+  colour on that head.
+- **The cutter's cap lies in the air of the cavity**, as a heightfield over the
+  outline: the visible surface plus a margin over the zone, and no higher than
+  the cavity wall beside it. A flat cap at the outer surface swallows the lip.
+- **The floor comes from the zone alone.** Computing it over a ring around the
+  outline puts it as deep as the deepest wall the ring touches.
+- **Clip the outline by the cavity walls.** Where a wall runs parallel to `d`,
+  the prism slices a groove into it; take the outline inside the free area by
+  a few hundredths of a millimetre.
+- **Check every insertion path by sweeping**: move the part from far outside to
+  its seat in steps of 0.1 mm against the head and the parts already inserted,
+  and require zero intersection volume at every step. When a straight path is
+  blocked, try a path of two straight legs — out along the part's own axis,
+  then out through the cavity opening. Name the path to the person who
+  assembles it.
+- **A band of colour thinner than two lines is not a part.** Grow it onto the
+  neighbouring part of the same colour, and give its pocket the width of the
+  channel it has to travel through, not of the band.
+- **Throw away the head's fragments between pockets.** Two pockets a few tenths
+  apart leave slivers floating in the cavity; keep the largest body.
+
+### Hair, a beard: one smooth sheet instead of a pocket
+
+Hair that wraps past a hemisphere — forehead to nape — cannot come off as a
+shell of constant thickness in any single direction. Cut it with **one smooth
+sheet** `s = h(u,v)`, a height field along the removal direction `a`: the part
+is `{s > h}`, the rest `{s < h − gap}`. Removal is then guaranteed by
+construction, and the sheet is both the floor and the side wall.
+
+- **Choose `a` by two numbers**: the share of the zone's area that has the
+  rest of the body above it along `a` (keep under 1 %), and the part's volume.
+  For a head of hair, up and back at about 60° from horizontal beats straight
+  up; a beard comes off downwards, a moustache forwards.
+- **Bounds per column, not a target surface.** Part surface points and points
+  at depth `T` under them must lie above `h`; rest surface points and points at
+  depth `M` under them below. Near the seam both depths ramp down with the
+  distance to the smoothed border times `tan 50°`, so the sheet meets the skin
+  at an angle instead of running along it.
+- **Solve for the flattest `h` between the bounds**: a membrane relaxation
+  with clamping, coarse grid to fine. It cuts deep where nothing objects and
+  thin where it has to.
+- **Smooth the bounds before solving, conservatively** — lower the upper bound
+  and raise the lower one by an eroded and blurred envelope. Raw per-cell
+  extremes of sampled points carry the sampling noise into the sheet.
+- **Smooth the sheet mesh in 3D afterwards (Taubin, ~60 passes).** Where the
+  sheet is steep relative to `a`, the grid diagonals leave a saw of a tenth of
+  a millimetre that no 2D blur removes.
+- **A print base is a pinned plane.** When the remaining body prints on the
+  cut, fix `h` to the plane over the largest feasible region, set the plane
+  above the highest point of the rest, and cap the sheet there, so nothing of
+  the rest rises above it. Keep the pinned vertices out of the 3D smoothing,
+  and re-pin after any blur — otherwise the plateau sinks and only its rim
+  touches the bed.
+- **A thin relief — a moustache — still needs prism walls.** With nothing
+  between the bounds, the sheet alone is rough. Bound it with an exact prism
+  over the smoothed footprint, widened by a quarter of a millimetre so the
+  relief's own side walls stay on the part, and give the pocket prism 0.2 mm
+  per side. A raster clip leaves the grid staircase in the wall.
+- **When a flat back is required, tilt the axis, not the floor.** A relief
+  draped over a lip with a pocket right behind it has no flat floor along its
+  own normal. Turn the extraction axis towards the neighbouring pocket's axis:
+  the prism then runs alongside that pocket instead of into it. The price
+  grows with the tilt — skin in the relief's shadow along the new axis ends up
+  inside the prism. Scan the tilt and pick the one where the pocket clearance
+  holds and the eaten skin is smallest; for a moustache that was 40° down,
+  between straight ahead and the teeth axis.
+- **Cut in sequence** (hair, then beard from what is left, then moustache);
+  each sheet sees the previous pockets as the rest's surface and keeps its
+  margin from them.
+
 ## Cut a zone, or leave it as a boss?
 
 An island zone has no choice — it is an inlay. When a zone **touches a body of
@@ -620,6 +736,91 @@ layer height, not by orientation**: such parts are small, so a separate fine-
 layer print, a height-range modifier, variable layer height or a 0.2 nozzle all
 cost little.
 
+**Two things outrank overhang area when choosing which way up, in this order.**
+
+1. **How the layers lie on the surface that gets looked at.** A surface that
+   ends up facing upwards is built as a *top* surface, out of concentric
+   perimeter rings, and on anything curved those rings read as contour lines —
+   the same defect that puts rings on an eyeball printed dome-up. A surface
+   that stands vertical is built from outer-wall perimeters stacked edge on
+   edge and comes out even. A face, a front, a painted panel therefore prints
+   **standing**, never lying.
+2. **The area of the first layer.** Overhang area comes third, and is usually
+   bought back with supports for a fraction of a gram.
+
+**A part another part covers is laid covered-side down**, within that
+constraint: the first layer, the elephant foot and the support scars then land
+where nothing shows.
+
+For a head the three candidate poses measure like this, on 8350 mm² of
+surface, 1713 of it face:
+
+| pose | first layer | contact hidden under hair | share of the face lying flat | support landing on the face |
+|---|---|---|---|---|
+| crown up | 474 mm² | 0 % | 5 % | 135 mm² |
+| face up | 177 mm² | 100 % | **59 %** | 0 |
+| **crown down** | **341 mm²** | **100 %** | **5 %** | **1 mm²** |
+
+Face-up wins on overhangs and loses the model: more than half the face becomes
+a top surface. Crown-down is the answer — the face stands vertical, the first
+layer sits on the crown under the hair, and the collar the next part seats on
+becomes a flat *top* surface instead of an elephant foot.
+
+**The seat of a joint must never be the first layer.** The flat collar the next
+part rests on is the one face that has to stay flat. Printed as the bottom
+layer it domes, and the part then hangs on its pin and rocks instead of sitting
+on the collar.
+
+**An inlay is laid down by its extraction axis, not by its largest flat
+facet.** The pocket's side wall is prismatic, so one of its facets is often the
+biggest plane on the part — put *that* on the bed and the inlay prints on its
+side, with the extraction axis horizontal and a staircase on the one surface
+that has to slide. Take the axis from the pocket instead: it is the direction
+the part is withdrawn in, which on a face or a shell is the local outward
+normal of the body at that spot. Lay the part so that axis stands up.
+
+**A patch inlay whose back follows a curved body has no flat face at all**, and
+printing it needs one. Cut the back flat, perpendicular to the extraction axis,
+taking off the least that gives a usable footprint — then **flatten the pocket
+floor to match**, or the part no longer touches bottom and is held by the side
+walls and the glue alone. The floor goes one depth-clearance below the cut
+plane: measured by rays from the cut face, that turned a gap of 0.31 mm median
+and 0.82 at worst into 0.050 median, 0.070 at the 95th percentile. Fill the
+floor by moving the body's own vertices up to the plane, not by a boolean — the
+patch is a thousand vertices against three quarters of a million faces, and the
+rest of the body keeps its triangulation and its other sockets untouched.
+
+**A round plug with a dome on top — an eye — stands on edge, axis horizontal.**
+With the axis vertical every layer of the dome is a concentric circle and the
+finished eyeball is visibly ringed. On edge the layers cut the dome in parallel
+planes and nothing reads as a ring. The price is paid on the cylinder: the
+first layers run along its own generatrix and spread, so such a plug needs
+0.15 mm per side. At zero it has to be sanded before it will go in.
+
+**A ball on a stalk is never printed ball-down**, and standing it up works only
+if the support reaches the full height. Support that stops at mid-height leaves
+the part free to wobble from there on, and every layer above goes down crooked.
+
+**A thin flat part — a tie, a strap, a lapel — is laid flat, not stood up.**
+Standing it up fails even behind a wall of supports.
+
+**A pin that would be the part's only footing belongs to neither part.**
+Printed waist down, a pair of cut-out trousers stood on the two 3 mm pins that
+join them to the shirt: 7 mm² of first layer, and the part tore off the plate.
+Drilling the pins out into blind sockets and printing them as separate dowels
+turned the same pose into 49 mm² on the part's own surface, and cost neither
+mating face anything. When deciding which half a pin grows on, count what the
+part stands on without it.
+
+**A pose that is a degree or two off is not that pose.** The same trousers at
+1.9° off vertical had 24 mm² of first layer instead of 49: the patch degenerates
+into a line along one edge. When an orientation is chosen for a flat face or a
+cut plane, set it exactly.
+
+**One failed first layer says nothing about the orientation.** Re-run the same
+pose unchanged before changing anything: a part that spaghettied once often
+prints on the second attempt with nothing altered.
+
 **Hand the parts over already rotated for printing**, not in their original
 orientation. Naming the orientation in words is not enough.
 
@@ -638,6 +839,7 @@ brim. Sweep orientations with the axis as a hard filter and report both numbers
 | sideways, per side | **0.20 mm** | 0.30 shows as a visible gap |
 | depth | **0.05 mm** | it is entirely how far the inlay sinks below the surface |
 | sideways if the inlay must print as a staircase | 0.30 mm | the staircase eats the difference |
+| sideways for a round plug printed on edge | **0.15 mm** | the first layers spread along the cylinder's generatrix |
 
 **The depth clearance is not the side clearance.** The inlay is stopped by the
 pocket floor, so however much deeper the floor is, that is how far the part
@@ -663,6 +865,19 @@ width**: the width is the drawing and must not be touched, while the thickness
 hides inside the pocket. Raise `--edge` until the neck clears the threshold,
 then **re-measure the walls** to neighbouring sockets, because the pocket is
 now deeper.
+
+### A strap restored by interpolation: measure its cross-section
+
+The feather threshold at the edge of a patch is for the edge. When the body of
+a narrow strap also sits near it, the strap prints as a hair and one printed
+cord ends up visibly thinner than its twin. Cut across the strap and take the
+inscribed circle of the section: **two extrusion lines is the floor**, and a
+section area under 1 mm² is a cord that will not survive handling.
+
+Cure it by lifting the outer face only — the back face of such a strap *is* the
+garment underneath and may not move. Fade the lift to zero within half a
+millimetre of the patch edge, or the outline of the strap grows and the drawing
+changes.
 
 ### Infill under a socket
 
@@ -924,6 +1139,17 @@ large generated mesh `EXACT` silently yields nothing — or a union that merely
 concatenates the shells — while the same operands run correctly through
 `MANIFOLD`. Verify the cutter on a cube first: if it subtracts there, the fault
 is in the input mesh, not in the tool, and changing its size will not help.
+Outside Blender the `manifold3d` library gives the same answer in a fraction
+of the time and is the better engine for a chain of a dozen cuts.
+
+**Run `pymeshfix` after the manifold solver's simplify.** The result can carry
+duplicated faces that make the STL non-watertight on reading, though the
+solver called it manifold. `pymeshfix.clean_from_arrays` with
+`remove_smallest_components=False` removes them without moving the surface.
+
+**Blender's STL import fails on a path with a decomposed character.** macOS
+keeps letters such as `й` decomposed (NFD) in file names, and the importer
+reports the file missing. Copy the mesh to an ASCII path before the run.
 
 **A flap hanging off one non-manifold edge is not a separate body.** Walk the
 faces through edges and it belongs to the main shell, so a by-volume cull keeps
