@@ -112,6 +112,14 @@ def rebuild(src, dst, mode):
         V = V + [tuple((V[b][k] + V[c][k]) / 2 for k in range(3))]
         mid = len(V) - 1
         T = [(a, b, mid, att), (a, mid, c, att)] + T[1:]
+    elif mode == "sliver":                  # игла: своя вершина на своём открытом ребре
+        a, b, c, att = T[0]
+        V = V + [tuple((V[b][k] + V[c][k]) / 2 for k in range(3))]
+        mid = len(V) - 1
+        cyc = lambda t: {(t[0], t[1]), (t[1], t[2]), (t[2], t[0])}
+        nb = next(i for i, t in enumerate(T) if (c, b) in cyc(t))   # сосед по ребру bc
+        T = [(a, b, mid, att), (a, mid, c, att), (b, c, mid, att)] + \
+            [t for i, t in enumerate(T) if i not in (0, nb)]
     vs = "".join(f'<vertex x="{x:.6f}" y="{y:.6f}" z="{z:.6f}"/>' for x, y, z in V)
     ts = "".join(f'<triangle v1="{a}" v2="{b}" v3="{c}"{att}/>' for a, b, c, att in T)
     xml = re.sub(r"<vertices>.*</vertices>", "<vertices>" + vs + "</vertices>", xml, flags=re.S)
@@ -385,6 +393,54 @@ def _():
     chk = run([TOOLS / "meshdoctor.py", dst], deps=NPSP)
     contains(chk, "ВЕРДИКТ: ЧИСТО", "OK открытых рёбер (дырки): 0")
     close(num(chk, r"объём ([\d.]+) мм³"), 14015.5, 0.1, "форма от веера не изменилась")
+
+
+@case("fixtjoints:своя вершина иглы на своём ребре — не T-стык")
+def _():
+    d = work("fixtjoints-sliver")
+    sl = rebuild(painted(d, FIX / "ball.stl"), d / "sliver.3mf", "sliver")
+    out = run([TOOLS / "fixtjoints.py", sl, "--dry"], deps=NPSP)
+    # дыра на месте выброшенного соседа: три открытых ребра, и ни на одном нет
+    # чужой вершины — середина ребра bc принадлежит самой игле
+    close(num(out, r"открытых рёбер: (\d+)", int), 3, 0, "открытых рёбер")
+    close(num(out, r"граней с T-стыком: (\d+)", int), 0, 0, "игла принята за T-стык")
+    contains(out, "T-стыков нет")
+
+
+@case("fixtjoints:объекты одного .model чинятся порознь, дублей нет")
+def _():
+    d = work("fixtjoints-multi")
+    tj = rebuild(painted(d, FIX / "ball.stl"), d / "tj.3mf", "tjoint")
+    # второй объект в том же .model: свой счёт вершин с нуля, как у резака-ниши
+    ent = entry(tj)
+    zi = zipfile.ZipFile(tj)
+    xml = zi.read(ent).decode("utf-8")
+    cube = ('<object id="77" type="other"><mesh><vertices>'
+            + "".join(f'<vertex x="{x}" y="{y}" z="{z}"/>'
+                      for x in (0, 1) for y in (0, 1) for z in (0, 1))
+            + '</vertices><triangles>'
+            + "".join(f'<triangle v1="{a}" v2="{b}" v3="{c}"/>' for a, b, c in
+                      [(0, 1, 3), (0, 3, 2), (4, 6, 7), (4, 7, 5), (0, 4, 5), (0, 5, 1),
+                       (2, 3, 7), (2, 7, 6), (0, 2, 6), (0, 6, 4), (1, 5, 7), (1, 7, 3)])
+            + '</triangles></mesh></object>')
+    xml = xml.replace("</resources>", cube + "</resources>", 1)
+    two = d / "two.3mf"
+    with zipfile.ZipFile(two, "w", zipfile.ZIP_DEFLATED) as zo:
+        for it in zi.infolist():
+            zo.writestr(it, xml.encode("utf-8") if it.filename == ent else zi.read(it.filename))
+    dst = d / "fixed.3mf"
+    out = run([TOOLS / "fixtjoints.py", two, dst], deps=NPSP)
+    contains(out, "сетка 2 из 2", "дублей граней: 0")
+    res = model_xml(dst)
+    objs = re.findall(r'<object id="(\d+)".*?</object>', res, re.S)
+    blocks = re.findall(r'<object id="\d+".*?</object>', res, re.S)
+    assert objs[-1] == "77", f"объекты: {objs}"
+    counts = [len(re.findall(r"<triangle ", b)) for b in blocks]
+    assert counts == [1284, 12], f"граней по объектам {counts}: куб утёк в основную сетку"
+    for b in blocks:
+        tri = re.findall(r'<triangle v1="(\d+)" v2="(\d+)" v3="(\d+)"', b)
+        keys = [tuple(sorted(map(int, t))) for t in tri]
+        assert len(set(keys)) == len(keys), "дубли граней"
 
 
 # ------------------------------------------------------------------ writeverts

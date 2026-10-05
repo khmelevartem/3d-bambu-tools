@@ -15,7 +15,7 @@ not change at all, and the children inherit the parent's `paint_color`.
     UV="uv run --quiet --with numpy --with scipy python"
     $UV tools/fixtjoints.py in.3mf out.3mf
     $UV tools/fixtjoints.py in.3mf --dry              # diagnosis only
-    $UV tools/fixtjoints.py in.3mf out.3mf --tol 0.005
+    $UV tools/fixtjoints.py in.3mf out.3mf --tol 0.0001
 
 Against the neighbouring tools:
 
@@ -25,6 +25,9 @@ Against the neighbouring tools:
 - `meshfix.py --holes` plugs a T-joint as if it were a hole and breeds
   non-manifold edges. T-joints first, holes second;
 - `meshsolid.py` rebuilds the body with voxels and loses the paint entirely.
+
+Each object of a `.model` is fanned on its own: objects index their vertices
+from zero, and pooling them sends a cutter's faces into the main mesh.
 
 Run this first, then `meshdoctor.py` on the result. Holes still left are real
 ones, and `weldmesh.py` closes them.
@@ -39,6 +42,7 @@ import numpy as np
 
 VERT = re.compile(r'<vertex x="([-\d.eE+]+)" y="([-\d.eE+]+)" z="([-\d.eE+]+)"')
 TRI = re.compile(r'<triangle v1="(\d+)" v2="(\d+)" v3="(\d+)"((?:\s+[\w:]+="[^"]*")*)\s*/>')
+MESH = re.compile(r'<mesh>.*?</mesh>', re.S)
 PAINT = re.compile(r'paint_color="([^"]*)"')
 SIMPLE = {'', '4', '8', '0C', '1C', '2C', '3C', '4C', '5C', '6C', '7C'}
 
@@ -73,16 +77,21 @@ def find_tjoints(v, faces, tol):
     print(f'  открытых рёбер: {len(idx)}')
     tree = cKDTree(v)
     n = len(faces)
+    # a real T-vertex ends open edges of the other side of the seam; a vertex merely
+    # passing near the edge does not, and fanning it in folds the surface
+    on_open = np.zeros(len(v), bool)
+    on_open[e[idx].ravel()] = True
     hits = {}
     for k in idx:
         ia, ib = e[k]
+        own = set(faces[k % n].tolist())     # a sliver's own corner may lie on its own edge
         a, b = v[ia], v[ib]
         ab = b - a
         l2 = float(ab @ ab)
         if l2 == 0.0:
             continue
         for j in tree.query_ball_point((a + b) / 2, np.sqrt(l2) / 2 + tol):
-            if j == ia or j == ib:
+            if j in own or not on_open[j]:
                 continue
             t = float((v[j] - a) @ ab) / l2
             if 0.0 < t < 1.0 and np.linalg.norm(v[j] - (a + t * ab)) < tol:
@@ -113,6 +122,24 @@ def fan(v, faces, attrs, hits):
 
 
 def process(xml, tol, dry):
+    """Every <mesh> of the file on its own: a .model may carry several objects,
+    each indexing its own vertices from zero. -> (new xml, {mesh number: faces}) or None."""
+    meshes = list(MESH.finditer(xml))
+    out, pos, counts = [], 0, {}
+    for i, m in enumerate(meshes):
+        if len(meshes) > 1:
+            print(f'  сетка {i + 1} из {len(meshes)}')
+        res = process_mesh(m.group(0), tol, dry)
+        out.append(xml[pos:m.start()])
+        out.append(res[0] if res else m.group(0))
+        pos = m.end()
+        if res:
+            counts[i] = res[1]
+    out.append(xml[pos:])
+    return (''.join(out), counts) if counts else None
+
+
+def process_mesh(xml, tol, dry):
     v = np.array(VERT.findall(xml), dtype=np.float64)
     raw = TRI.findall(xml)
     if not len(v) or not raw:
@@ -138,7 +165,9 @@ def process(xml, tol, dry):
     extra, tri, out_attr = fan(v, faces, attrs, hits)
     v2 = np.vstack([v, extra]) if len(extra) else v
     left = len(open_edges(tri)[1])
-    print(f'  выход: вершин {len(v2)}, граней {len(tri)}, открытых рёбер осталось: {left}')
+    dup = len(tri) - len(np.unique(np.sort(tri, axis=1), axis=0))
+    print(f'  выход: вершин {len(v2)}, граней {len(tri)}, открытых рёбер осталось: {left}, '
+          f'дублей граней: {dup}')
     if dry:
         return None
 
@@ -158,20 +187,24 @@ def main():
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument('src')
     p.add_argument('dst', nargs='?', help='не нужен с --dry')
-    p.add_argument('--tol', type=float, default=1e-3,
-                   help='допуск «вершина лежит на ребре», в единицах файла (по умолчанию 0.001)')
+    p.add_argument('--tol', type=float, default=1e-5,
+                   help='допуск «вершина лежит на ребре», в единицах файла (по умолчанию 0.00001: '
+                        'координаты пишутся с 6 знаками, настоящий T-стык лежит на ребре до округления; '
+                        'допуск крупнее ловит соседние вершины и складывает веер в дубли)')
     p.add_argument('--dry', action='store_true', help='только диагноз, файл не писать')
     a = p.parse_args()
     if not a.dry and not a.dst:
         sys.exit('нужен выходной файл (или --dry)')
 
     zin = zipfile.ZipFile(a.src)
-    patched, faces = {}, {}
+    patched, faces, meshes = {}, {}, 0
     for name in mesh_members(zin):
         print(name)
-        res = process(zin.read(name).decode('utf-8'), a.tol, a.dry)
+        xml = zin.read(name).decode('utf-8')
+        meshes += len(MESH.findall(xml))
+        res = process(xml, a.tol, a.dry)
         if res:
-            patched[name], faces[name] = res
+            patched[name], faces[name] = res[0], sum(res[1].values())
     if a.dry:
         return
     if not patched:
@@ -184,7 +217,7 @@ def main():
             data = zin.read(item.filename)
             if item.filename in patched:
                 data = patched[item.filename].encode('utf-8')
-            elif item.filename == 'Metadata/model_settings.config' and len(faces) == 1:
+            elif item.filename == 'Metadata/model_settings.config' and meshes == 1:
                 data = re.sub(rb'face_count="\d+"', f'face_count="{total}"'.encode(), data)
             zout.writestr(item, data)
     shutil.move(tmp, a.dst)

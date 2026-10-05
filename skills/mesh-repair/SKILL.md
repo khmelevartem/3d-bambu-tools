@@ -176,7 +176,10 @@ rebuild there costs all the paint. Tell it apart and fix it:
 
 The `fixtjoints.py` tolerance is in file units and is deliberately tight.
 **Do not widen it blindly** — past a narrow margin it stops meaning "a vertex
-on the edge" and starts meaning "a vertex nearby".
+on the edge" and starts meaning "a vertex nearby". The symptom is a non-zero
+`дублей граней` in the output line, with open edges left over: a nearby vertex
+fanned into a face folds it back onto its neighbour. Coordinates are written
+with six decimals, so a real T-vertex sits on its edge to about 1e-6.
 
 **Repair in one pass, then compare — never stack passes.** Hole filling on a
 torn rim leaves slivers and T-seams; the next pass's degenerate-face cleanup
