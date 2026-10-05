@@ -191,6 +191,19 @@ $UV tools/paint_split.py cut    work/p.npz work/parts --scale S --plane-cut auto
 uv run --quiet python tools/pivot_joint.py work/joints.json
 ```
 
+Relief on an organic body — hair, a beard, a moustache, a ring in an ear — is
+cut by `relief_cut.py`: `sheet` for a zone lying on the surface, `drape` for a
+relief overhanging it, `ring` for a ring rebuilt as a body of revolution,
+`check` for intersections, removal sweeps and where the paint ended up.
+
+```bash
+RC="uv run --with numpy --with scipy --with trimesh --with manifold3d --with shapely --with mapbox_earcut --with scikit-image --with pymeshfix --with rtree python tools/relief_cut.py"
+$RC sheet --paint work/p.npz --labels work/parts.npy --zone 1 --axis 0,0.5,0.87 --plane 48.3 --out work/hair
+$RC drape --paint work/p.npz --labels work/parts.npy --zone 3 --body work/hair_rest.stl --axis 0,-0.77,-0.64 --out work/must
+$RC ring  --paint work/p.npz --zone 1 --at X,Y,Z --at X,Y,Z --same --lip 3.2 --body work/must_rest.stl --out work/gauge
+$RC check work/gauge_rest.stl work/hair_part.stl@0,0.5,0.87 work/must_part.stl@0,-0.77,-0.64 --src work/body.stl
+```
+
 `--plane-cut auto` moves a jointed seam from the colour contour onto a plane;
 **it must be identical for `joints` and `cut`, because it changes the mesh.**
 

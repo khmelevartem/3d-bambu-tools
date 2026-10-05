@@ -657,6 +657,8 @@ shell of constant thickness in any single direction. Cut it with **one smooth
 sheet** `s = h(u,v)`, a height field along the removal direction `a`: the part
 is `{s > h}`, the rest `{s < h − gap}`. Removal is then guaranteed by
 construction, and the sheet is both the floor and the side wall.
+`relief_cut.py sheet` does all of the below; `--plane-scan` lists the platform
+area for candidate planes before cutting.
 
 - **Choose `a` by two numbers**: the share of the zone's area that has the
   rest of the body above it along `a` (keep under 1 %), and the part's volume.
@@ -704,7 +706,7 @@ construction, and the sheet is both the floor and the side wall.
 A moustache, a lock of hair over a cheek, a collar lying on a neck: the relief
 rises from the skin and overhangs it. A prism over its **silhouette** along the
 extraction axis takes the skin in the relief's shadow along with it — a skin-
-coloured band on the part.
+coloured band on the part. `relief_cut.py drape` does all of the below.
 
 - **Put the prism on the attachment line**, where the relief grows out of the
   skin. Classify each column along the axis: the first hit is the relief, and
@@ -718,7 +720,9 @@ coloured band on the part.
   ring bites a notch out of the visible edge.
 - **Shorten the plug at narrow ends, equally on both sides.** A full-depth
   plug under a thin tip shows as a tall flat wall. Cut both tips back by the
-  same length from the end of the relief. Separate the tip relief beyond the
+  same length from the end of the relief, measured towards each tip from the
+  relief's centre. Narrow necks of the plug go too, but only dangling ones: a
+  neck bridging two halves of the plug stays. Separate the tip relief beyond the
   plug along the skin continued harmonically under it from a ring of skin
   columns around. Report the colour this costs — the tip's thinnest edge stays
   on the head.
@@ -726,11 +730,16 @@ coloured band on the part.
 ### A ring through a thin part: measure and rebuild as a body of revolution
 
 An ear tunnel, a nose ring, a grommet: the generator's ring is lumpy. Replace
-it with exact geometry.
+it with exact geometry. `relief_cut.py ring` measures, rebuilds and cuts the
+pocket; `--same` makes a pair identical.
 
 - **Axis**: the smallest eigenvector of the area-weighted normal matrix is the
   first guess; refine it with a least-squares cylinder fit to the bore faces
-  only (normals pointing at the axis). The first guess alone tilts the profile.
+  only (normals pointing at the axis and square to it). The first guess alone
+  tilts the profile, and with a large lip it can be the wrong eigenvector:
+  start the fit from all three and keep the best one.
+- **Sample the faces by area, do not take centroids.** A bore is a few long
+  triangles, a lip is many small ones; by centroid the lip outvotes the bore.
 - **Profile**: plot radius against position along the axis, inward- and
   outward-facing faces separately. A rounded lip is a torus tangent to the
   bore: minor radius `(R_max − r_bore)/2`, major radius `r_bore + minor`.
@@ -752,7 +761,7 @@ A person's own correction comes back in the print pose and often open.
   with the version before the edit — it should differ by the edit, not by the
   hole.
 - Re-run the pairwise intersections and the removal sweeps against every
-  part. Overlaps of a thousandth of a cubic millimetre are the edit pushing
+  part (`relief_cut.py check`). Overlaps of a thousandth of a cubic millimetre are the edit pushing
   through a neighbour: subtract the neighbour from the body rather than moving
   vertices back.
 
@@ -972,6 +981,7 @@ centres and depths and take the one with a real wall.
 |---|---|
 | the seam is a plane or a cylinder, and the parts must sum back to the solid | `solid_cut.py` |
 | a joint across an axis: one cut, a blind socket in each half, a pin | `pivot_joint.py` |
+| relief on an organic body: a smooth-sheet cut, a draped relief, a ring | `relief_cut.py` |
 | the price of cutting by colour, which seams survive, the socket plan | `paint_split.py` |
 | a whole limb cut off with a pin, planned by hand in the Blender viewport | **EasySlice Print**, an addon |
 
