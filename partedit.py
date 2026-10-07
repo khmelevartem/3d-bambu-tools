@@ -186,11 +186,15 @@ class Project:
         self.next_id += 2
         return self.next_id - 2, self.next_id - 1     # inner, outer
 
+    def _next_object_path(self):
+        # A job may drop every object before adding one, leaving no file to count from.
+        n = 1 + max((int(re.search(r'object_(\d+)\.model', p).group(1))
+                     for p in self.files if p.startswith('3D/Objects/')), default=0)
+        return f'3D/Objects/object_{n}.model'
+
     def add_mesh_file(self, V, F, code=None):
         """A new 3D/Objects/object_N.model. Returns (path, id inside the file)."""
-        n = 1 + max(int(re.search(r'object_(\d+)\.model', p).group(1))
-                    for p in self.files if p.startswith('3D/Objects/'))
-        path = f'3D/Objects/object_{n}.model'
+        path = self._next_object_path()
         inner, _ = self._new_ids()
         self.files[path] = mesh_xml(V, F, inner, code)
         return path, inner
@@ -219,9 +223,7 @@ class Project:
         raw = self.files[ent].decode()
         new, n = transform_model(raw, R, T)
         inner = int(re.search(r'<object id="(\d+)"', new).group(1))
-        n2 = 1 + max(int(re.search(r'object_(\d+)\.model', p).group(1))
-                     for p in self.files if p.startswith('3D/Objects/'))
-        path = f'3D/Objects/object_{n2}.model'
+        path = self._next_object_path()
         newid, _ = self._new_ids()
         new = new.replace(f'<object id="{inner}"', f'<object id="{newid}"', 1)
         self.files[path] = new.encode()

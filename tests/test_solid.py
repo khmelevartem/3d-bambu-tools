@@ -591,6 +591,41 @@ def _():
         assert not dup, f"{entry}: повторённые id объектов {dup}"
 
 
+@case("partedit:объект добавляется в опустевший проект", tools=("partedit.py",))
+def _():
+    # Задание убирает все объекты и кладёт новый. Номер следующего
+    # 3D/Objects/object_N.model считался по уже лежащим файлам — а их не
+    # осталось ни одного, и apply падал на пустом max().
+    d = work("partedit_пустой")
+    out = run([TOOLS / "partedit.py", "apply",
+               spec(d / "job.json",
+                    {"src": str(painted("ball")), "dst": str(d / "new.3mf"), "ops": [
+                        {"op": "drop", "name": "ball.stl"},
+                        {"op": "object", "name": "Брусок", "extruder": 3, "plate": 1,
+                         "pos": [128, 128, 0],
+                         "mesh": {"kind": "box", "lo": [0, 0, 0], "hi": [4, 4, 4]}},
+                        {"op": "part", "object": "Брусок", "name": "Шапка",
+                         "mesh": {"kind": "box", "lo": [0, 0, 4], "hi": [2, 2, 6]}}]})],
+              deps=("numpy",))
+    contains(out, "объект «ball.stl» убран")
+    close(num(out, r"Брусок: часть «Шапка» \(normal_part\), объём ([\d.]+) мм³"),
+          8.0, 0.01, "объём части")
+    out = run([TOOLS / "partedit.py", "list", d / "new.3mf"], deps=("numpy",))
+    contains(out, "Брусок (филамент 3)", "normal_part     Шапка")
+    assert "ball.stl" not in out, "убранный объект остался в проекте"
+    import re as _re, zipfile as _zip
+    z = _zip.ZipFile(d / "new.3mf")
+    top = z.read("3D/3dmodel.model").decode()
+    objs = _re.findall(r'<object id="(\d+)"', z.read("Metadata/model_settings.config").decode())
+    assert len(objs) == 1, f"объектов в проекте {len(objs)}, ожидался один"
+    paths = _re.findall(r'p:path="/([^"]+)"', top)
+    meshes = [n for n in z.namelist() if n.startswith("3D/Objects/")]
+    assert sorted(paths) == sorted(meshes), f"ссылки {paths}, файлы {meshes}"
+    # два бруска по 12 треугольников; от шара (1280) не должно остаться ни одного
+    faces = sum(z.read(p).decode().count("<triangle ") for p in paths)
+    close(faces, 24, 0, "граней в проекте")
+
+
 @case("solid_cut:осколки реза выброшены, а дополнение режется тем же резаком",
       needs=("blender",), tools=("solid_cut.py",))
 def _():
