@@ -484,8 +484,9 @@ def cmd_filament(a):
     zin = zipfile.ZipFile(a.src)
     cfgname = 'Metadata/project_settings.config'
     if cfgname not in zin.namelist():
-        sys.exit(f'{a.src}: нет {cfgname}: файл собран с --no-project или\n'
-                 'экспортирован без настроек. Они появляются, когда файл открыт\n'
+        sys.exit(f'{a.src}: нет {cfgname}.\n'
+                 'Файл собран make_multicolor_3mf.py (он не кладёт настроек)\n'
+                 'или экспортирован без настроек. Они появляются, когда файл открыт\n'
                  'и сохранён в Bambu Studio; перенести потом — retune_project.py')
     cfg = json.loads(zin.read(cfgname))
     n = len(cfg['filament_colour'])

@@ -50,8 +50,8 @@ def project(with_settings=True):
         p = d / ("p.3mf" if with_settings else "c.3mf")
         argv = [TOOLS / "make_multicolor_3mf.py", FIX / "ball.stl",
                 FIX / "ball_zones.npy", "-o", p]
-        if not with_settings:
-            argv.append("--no-project")
+        if with_settings:
+            argv.append("--project")
         run(argv, deps=("trimesh", "numpy"))
         _CACHE[key] = p
     return _CACHE[key]
@@ -294,7 +294,7 @@ def _():
     d = work("patch3mf_bare")
     out = run([TOOLS / "patch3mf.py", project(with_settings=False), d / "o.3mf",
                "layer_height=0.12"], expect=1)
-    contains(out, f"нет {CFG}", "собран с --no-project", "retune_project.py")
+    contains(out, f"нет {CFG}", "он не кладёт настроек", "retune_project.py")
     assert "Traceback" not in out, "вместо сообщения вывалился трейсбек"
     assert not (d / "o.3mf").exists(), "испорченный файл всё-таки записан"
 
@@ -445,7 +445,7 @@ def _():
 def _():
     out = run([TOOLS / "figopt.py", "audit", project(False)], deps=("numpy",), expect=1)
     assert "Traceback" not in out, f"трейсбек вместо объяснения:\n{out}"
-    contains(out, CFG, "--no-project", "retune_project.py")
+    contains(out, CFG, "он не кладёт настроек", "retune_project.py")
 
 
 @case("retune_project:эталон без настроек — отказ, а не трейсбек",

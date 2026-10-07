@@ -88,9 +88,19 @@ hand-written `different_settings_to_system` changes that.
 
 The route that works:
 
-1. Build the project with **`--no-project`**: geometry and `paint_color` are
-   there and the config is absent entirely. The GUI has nothing to reject and
-   opens the file with the user's current settings.
+1. Build the project **without a config** — the default of
+   `make_multicolor_3mf.py`: geometry and `paint_color` are there and the
+   config is absent entirely. The GUI has nothing to reject and opens the file
+   with the user's current settings. `--project` adds the config for the CLI
+   only; a file built with it is never handed to a person.
+
+   **Without a config the paint is invisible** unless the open project already
+   has enough filaments: a slot it lacks shows as filament 1, and the model
+   looks one colour. When the person has a project of this model saved by
+   Bambu Studio, borrow its config instead: `--config-from saved.3mf` copies it
+   byte for byte and writes the plate's `filament_maps` to match, and the zones
+   become numbers in that project's filament list. A colour the project lacks
+   is added to a copy of the donor first with `paint.py filament`.
 2. The person edits the paint and saves. The file now has a config written by
    Bambu Studio itself, and it is guaranteed to open.
 3. Send settings **into their file** with `tools/retune_project.py`, which

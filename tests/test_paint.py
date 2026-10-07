@@ -28,7 +28,7 @@ def ball_project(d, name="ball_p.3mf", extra=()):
     """The same project WITH Metadata/project_settings.config. Needs Bambu profiles."""
     out = d / name
     run([TOOLS / "make_multicolor_3mf.py", FIX / "ball.stl", FIX / "ball_zones.npy",
-         "-o", out, *extra], deps=MAKE)
+         "-o", out, "--project", *extra], deps=MAKE)
     return out
 
 
@@ -45,6 +45,9 @@ def fig_npz(d, name="fp.npz"):
     out = d / name
     run([TOOLS / "paint.py", "parse", mf, out], deps=PAINT)
     return out
+
+
+CFG = "Metadata/project_settings.config"
 
 
 def config(path):
@@ -96,14 +99,35 @@ def _():
     contains(out, "филамент 1 (#111111)", "филамент 2 (#F4EE2A)", "филамент 3 (#00FF00)")
 
 
-@case("make_multicolor:--no-project не кладёт настроек, без него кладёт",
+@case("make_multicolor:по умолчанию без настроек — их бракует интерфейс; --project кладёт",
       needs=("bambu",), tools=("make_multicolor_3mf.py",))
 def _():
     d = work("make_multicolor_project")
-    bare = ball_3mf(d, "bare.3mf")
-    assert "Metadata/project_settings.config" not in zipfile.ZipFile(bare).namelist()
+    out = run([TOOLS / "make_multicolor_3mf.py", FIX / "ball.stl", FIX / "ball_zones.npy",
+               "-o", d / "bare.3mf"], deps=MAKE)
+    assert "Metadata/project_settings.config" not in zipfile.ZipFile(d / "bare.3mf").namelist()
+    contains(out, "без настроек проекта", "не меньше 3 филаментов")
     cfg = config(ball_project(d))
     assert cfg["filament_colour"] == ["#F4EE2A", "#8E9089", "#7C4B27"], cfg["filament_colour"]
+
+
+@case("make_multicolor:--config-from кладёт чужой конфиг байт в байт и карту стола по нему",
+      needs=("bambu",), tools=("make_multicolor_3mf.py",))
+def _():
+    d = work("make_multicolor_config_from")
+    donor = ball_project(d, "donor.3mf")                  # три филамента
+    out = run([TOOLS / "make_multicolor_3mf.py", FIX / "ball.stl", FIX / "ball_zones.npy",
+               "-o", d / "b.3mf", "--config-from", donor], deps=MAKE)
+    contains(out, "настройки проекта взяты дословно")
+    z = zipfile.ZipFile(d / "b.3mf")
+    assert z.read(CFG) == zipfile.ZipFile(donor).read(CFG), "конфиг переписан, а не взят дословно"
+    ms = z.read("Metadata/model_settings.config").decode()
+    assert 'key="filament_maps" value="1 1 1"' in ms, ms
+    # донор — не проект Bambu Studio: отказ с объяснением, а не трейсбек
+    out = run([TOOLS / "make_multicolor_3mf.py", FIX / "ball.stl", FIX / "ball_zones.npy",
+               "-o", d / "c.3mf", "--config-from", FIX / "ball.stl"], deps=MAKE, expect=2)
+    contains(out, "не проект 3MF")
+    assert "Traceback" not in out, out
 
 
 # ------------------------------------------------------------------------------ paint.py
@@ -178,7 +202,7 @@ def _():
               deps=PAINT, expect=1)
     assert "Traceback (most recent call last)" not in out, "трейсбек вместо сообщения\n" + out
     contains(out, "нет Metadata/project_settings.config",
-             "--no-project", "retune_project.py")
+             "он не кладёт настроек", "retune_project.py")
     assert not (d / "plus.3mf").exists(), "недоделанный файл всё-таки написан"
 
 

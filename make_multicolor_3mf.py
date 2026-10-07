@@ -8,6 +8,22 @@ been drawn with the Color Painting brush.
     uv run --with trimesh --with numpy python3 tools/make_multicolor_3mf.py \
         model.stl zones.npy -o model_color.3mf
 
+**By default the file carries no `project_settings.config`**, because the GUI
+refuses a config assembled in code ("an invalid configuration was found",
+then "no geometry data") however complete it is. Without one the GUI opens
+the file with the person's current presets, and the paint is assigned to
+filament slots by number - and a slot the open project lacks shows as
+filament 1, so the whole model looks one colour. `--project` writes a config
+assembled in code: the CLI slices such a file, the GUI does not open it. Use it
+for `slice.sh` and the regression only, never for a file handed to a person.
+
+**To hand over a file that opens with its colours, borrow the config:**
+`--config-from saved.3mf` copies `project_settings.config` byte for byte from a
+project that Bambu Studio itself saved - the GUI accepts what it wrote. The
+zones are then numbers in THAT project's filament list; the tool prints the
+list and refuses zones beyond it. A missing colour is added to the donor first
+with `paint.py filament`, which grows every per-filament list consistently.
+
 How it works
 ------------
 Paint lives in the `paint_color` attribute on `<triangle>` inside
@@ -48,8 +64,9 @@ Rules
   two percent. But that convention is known only to the slicer: outside it,
   such faces take an arbitrary material. MakerWorld originals carry a code on
   every face without exception.
-* The filament count in project_settings.config must be at least the highest
-  number used, or the object's extruder is reset to 1.
+* The filament count in the project must be at least the highest number used,
+  or the object's extruder is reset to 1. Without a config that count is the
+  person's open project, so the tool says how many slots the file needs.
 * A file counts as a native Bambu project only when 3dmodel.model carries an
   Application metadata entry naming Bambu Studio. Otherwise the slicer takes
   its foreign-3mf branch and interprets part of the data differently.
@@ -225,7 +242,8 @@ def build_root_model(offset, app_version: str) -> bytes:
     ).encode()
 
 
-def build_model_settings(name: str, base: int, face_count: int, oid: int = 2) -> bytes:
+def build_model_settings(name: str, base: int, face_count: int, oid: int = 2,
+                         n_fil: int = 0) -> bytes:
     """Metadata/model_settings.config — object name, its filament, one part.
 
         Process settings do not go here: they override the profile, and the profile
@@ -252,6 +270,11 @@ def build_model_settings(name: str, base: int, face_count: int, oid: int = 2) ->
         '    <metadata key="plater_id" value="1"/>\n'
         '    <metadata key="plater_name" value=""/>\n'
         '    <metadata key="locked" value="false"/>\n'
+        # a borrowed config has n filaments, and the plate lists one map each,
+        # as Bambu Studio writes it; a list of the wrong length breaks the load
+        + ('    <metadata key="filament_map_mode" value="Auto For Flush"/>\n'
+           f'    <metadata key="filament_maps" value="{" ".join(["1"] * n_fil)}"/>\n'
+           if n_fil else '') +
         '    <model_instance>\n'
         f'      <metadata key="object_id" value="{oid}"/>\n'
         '      <metadata key="instance_id" value="0"/>\n'
@@ -383,11 +406,16 @@ def main() -> None:
                     help="вся геометрия в одном 3D/3dmodel.model, без расширения "
                          "production. Именно такой файл открывается в интерфейсе "
                          "Bambu Studio; файл с вынесенной геометрией — нет.")
+    ap.add_argument("--project", action="store_true",
+                    help="положить project_settings.config. Такой файл режет CLI, "
+                         "но интерфейс Bambu Studio его НЕ открывает: конфиг, "
+                         "собранный кодом, он бракует. Только для slice.sh и регресса.")
     ap.add_argument("--no-project", action="store_true",
-                    help="не класть project_settings.config: получается «голая» "
-                         "модель с покраской, без пресетов. Такой файл нечему "
-                         "забраковать на этапе проверки конфига — Bambu Studio "
-                         "открывает его со своими текущими настройками.")
+                    help="умолчание, ключ оставлен для старых вызовов")
+    ap.add_argument("--config-from",
+                    help="проект, сохранённый Bambu Studio: его project_settings.config "
+                         "кладётся дословно, и интерфейс открывает файл со своими цветами. "
+                         "Зоны — номера филаментов ЭТОГО проекта")
     ap.add_argument("--no-center", action="store_true",
                     help="не двигать модель в центр стола")
     a = ap.parse_args()
@@ -426,10 +454,30 @@ def main() -> None:
         filaments = [(filaments[i][0] if i < len(filaments) else DEFAULT_FILAMENTS[0][0],
                       filaments[i][1] if i < len(filaments) else "GFA00", c)
                      for i, c in enumerate(cols)]
+    donor = None
+    if a.config_from:
+        try:
+            dz = zipfile.ZipFile(a.config_from)
+        except (zipfile.BadZipFile, OSError):
+            print(f"{a.config_from}: не проект 3MF — нужен файл, сохранённый в Bambu Studio")
+            sys.exit(2)
+        if "Metadata/project_settings.config" not in dz.namelist():
+            sys.exit(f"{a.config_from}: нет настроек проекта — нужен файл, сохранённый в Bambu Studio")
+        head = dz.read("3D/3dmodel.model")[:4000].decode("utf-8", "ignore")
+        if "BambuStudio" not in head:
+            sys.exit(f"{a.config_from}: сохранён не Bambu Studio — его конфиг интерфейс может не принять")
+        donor = dz.read("Metadata/project_settings.config")
+        dc = json.loads(donor)
+        cols, names = dc["filament_colour"], dc.get("filament_settings_id", [])
+        if slots > len(cols):
+            sys.exit(f"зон до {slots}, а в {a.config_from} филаментов {len(cols)} — "
+                     f"добавьте недостающий: paint.py filament донор.3mf новый.3mf '#RRGGBB'")
+        filaments = [(names[i] if i < len(names) else "", "", cols[i]) for i in range(len(cols))]
     if len(filaments) < slots:
         sys.exit(f"зон {slots}, а слотов описано {len(filaments)} — "
                  f"добавьте --colors/--filaments")
-    filaments = filaments[:max(slots, 1)]
+    if not donor:
+        filaments = filaments[:max(slots, 1)]
 
     # The most frequent filament is assigned to the object as its extruder,
     # but its faces are painted too: omitting the attribute on background
@@ -467,12 +515,24 @@ def main() -> None:
             z.writestr("3D/Objects/object_1.model",
                        build_object_model(mesh, face_fil))
         z.writestr("Metadata/model_settings.config",
-                   build_model_settings(name, base, len(mesh.faces), oid))
-        if not a.no_project:
+                   build_model_settings(name, base, len(mesh.faces), oid,
+                                        len(filaments) if donor else 0))
+        if donor:
+            z.writestr("Metadata/project_settings.config", donor)
+        elif a.project and not a.no_project:
             z.writestr("Metadata/project_settings.config",
                        build_project_settings(filaments, a.printer, a.process))
 
     print(f"готово: {a.out}  ({os.path.getsize(a.out)/1e6:.1f} МБ)")
+    if donor:
+        print(f"настройки проекта взяты дословно из {a.config_from}: филаменты "
+              + ", ".join(f"{n} — {filaments[n-1][2]}" for n in range(1, len(filaments) + 1)))
+    elif a.project and not a.no_project:
+        print("с настройками проекта: для CLI. В интерфейсе Bambu Studio такой файл не откроется")
+    else:
+        print(f"без настроек проекта: интерфейс откроет его со своими пресетами; "
+              f"в проекте нужно не меньше {slots} филаментов, слоты по порядку: "
+              + ", ".join(f"{n} — {filaments[n-1][2]}" for n in range(1, slots + 1)))
     print("открыть:  open -a BambuStudio " + a.out)
 
 

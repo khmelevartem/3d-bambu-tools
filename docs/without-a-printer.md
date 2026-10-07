@@ -30,11 +30,13 @@ work on any 3MF that already carries settings — a downloaded project does.
 `gcode_report.py` and `figopt.py gcode` work on any Bambu Studio G-code,
 including one someone else sliced and sent.
 
-`make_multicolor_3mf.py` sits in between. Building the settings block needs the
-presets, so it stops with "профиль не найден"; with **`--no-project`** it writes
-the geometry and the `paint_color` triangles and leaves settings out. That file
-is a complete painted model to hand on — but `paint.py filament` and
-`patch3mf.py` have no settings to edit in it, and say so.
+`make_multicolor_3mf.py` sits in between. By default it writes the geometry and
+the `paint_color` triangles and leaves settings out, so it needs no presets.
+That file is a complete painted model to hand on — but `paint.py filament` and
+`patch3mf.py` have no settings to edit in it, and say so. `--project` builds the
+settings block from the presets and stops with "профиль не найден" without
+them; `--config-from` copies the block from a project Bambu Studio saved and
+needs no presets either.
 
 **`hardware.json` is still required**, and the part of it that matters changes.
 The non-slicing tools read physical numbers from it — nozzle diameter, layer

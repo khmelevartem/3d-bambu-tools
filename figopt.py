@@ -26,9 +26,10 @@ BLOCK, WARN, HINT, OK = "БЛОКЕР", "ВАЖНО", "СОВЕТ", "ок"
 def cfg_of(path):
     with zipfile.ZipFile(path) as z:
         if CFG not in z.namelist():
-            sys.exit(f"{path}: нет {CFG}: файл собран с --no-project или экспортирован\n"
-                     "без настроек. Они появляются, когда файл открыт и сохранён\n"
-                     "в Bambu Studio; перенести их туда потом — retune_project.py")
+            sys.exit(f"{path}: нет {CFG}.\n"
+                     "Файл собран make_multicolor_3mf.py (он не кладёт настроек)\n"
+                     "или экспортирован без настроек. Они появляются, когда файл открыт\n"
+                     "и сохранён в Bambu Studio; перенести их туда потом — retune_project.py")
         return json.loads(z.read(CFG))
 
 

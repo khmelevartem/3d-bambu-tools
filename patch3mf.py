@@ -33,9 +33,10 @@ with zipfile.ZipFile(src) as z:
     data = {it.filename: z.read(it.filename) for it in items}
 
 if CFG not in data:
-    sys.exit(f'{src}: нет {CFG}: файл собран с --no-project или экспортирован\n'
-             'без настроек. Они появляются, когда файл открыт и сохранён\n'
-             'в Bambu Studio; перенести их туда потом — retune_project.py')
+    sys.exit(f'{src}: нет {CFG}.\n'
+             'Файл собран make_multicolor_3mf.py (он не кладёт настроек)\n'
+             'или экспортирован без настроек. Они появляются, когда файл открыт\n'
+             'и сохранён в Bambu Studio; перенести их туда потом — retune_project.py')
 cfg = json.loads(data[CFG])
 n = len(cfg['filament_colour'])
 if drop is not None:

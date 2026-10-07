@@ -3,9 +3,10 @@
 
 Why. A project assembled in code (`make_multicolor_3mf.py`) will not open
 in the GUI: "Invalid configuration file" and then "The file does not contain
-any geometry data". The working way around is to hand the file over with
-`--no-project`, let the human open and save it, and send the settings into
-THEIR file: its shell and `project_settings.config` were written by Bambu itself.
+any geometry data". The working way around is to hand the file over without
+a config (the tool's default), let the human open and save it, and send the
+settings into THEIR file: its shell and `project_settings.config` were written
+by Bambu itself.
 
     python3 tools/retune_project.py human_file.3mf -o ready.3mf
     python3 tools/retune_project.py file.3mf -o ready.3mf \
