@@ -283,6 +283,74 @@ def _():
     assert list(d.glob("*.stl")), "извлечённый STL не появился"
 
 
+
+# Два объекта в духе Bambu: сетки в 3D/Objects/, наверху обёртки-компоненты,
+# в model_settings.config счётчики граней у каждого свои. Куб на 12 граней
+# и тетраэдр на 4 — чтобы чужой счётчик не совпал с новым случайно.
+def two_object_3mf(path):
+    cube_v = [(x, y, z) for x in (0, 10) for y in (0, 10) for z in (0, 10)]
+    cube_t = [(0, 1, 3), (0, 3, 2), (4, 6, 7), (4, 7, 5), (0, 4, 5), (0, 5, 1),
+              (2, 3, 7), (2, 7, 6), (0, 2, 6), (0, 6, 4), (1, 5, 7), (1, 7, 3)]
+    tet_v = [(0, 0, 0), (10, 0, 0), (0, 10, 0), (0, 0, 10)]
+    tet_t = [(0, 2, 1), (0, 1, 3), (0, 3, 2), (1, 2, 3)]
+    ns = ('xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02"'
+          ' xmlns:p="http://schemas.microsoft.com/3dmanufacturing/production/2015/06"')
+
+    def mesh(oid, V, T):
+        return (f'<?xml version="1.0" encoding="UTF-8"?>\n<model unit="millimeter" {ns}>'
+                f'<resources><object id="{oid}" type="model"><mesh><vertices>'
+                + "".join(f'<vertex x="{x}" y="{y}" z="{z}"/>' for x, y, z in V)
+                + "</vertices><triangles>"
+                + "".join(f'<triangle v1="{a}" v2="{b}" v3="{c}"/>' for a, b, c in T)
+                + "</triangles></mesh></object></resources><build/></model>")
+
+    def wrapper(top, inner, f):
+        return (f'<object id="{top}" type="model"><components>'
+                f'<component p:path="/3D/Objects/{f}" objectid="{inner}"'
+                ' transform="1 0 0 0 1 0 0 0 1 0 0 0"/></components></object>')
+
+    def settings(top, inner, n):
+        return (f'  <object id="{top}">\n    <metadata key="name" value="o{top}"/>\n'
+                f'    <metadata face_count="{n}"/>\n    <part id="{inner}" subtype="normal_part">\n'
+                f'      <mesh_stat face_count="{n}" edges_fixed="0"/>\n    </part>\n  </object>\n')
+
+    root = (f'<?xml version="1.0" encoding="UTF-8"?>\n<model unit="millimeter" {ns}'
+            ' requiredextensions="p"><resources>'
+            + wrapper(2, 1, "object_1.model") + wrapper(4, 3, "object_3.model")
+            + '</resources><build><item objectid="2" transform="1 0 0 0 1 0 0 0 1 50 50 0"/>'
+            '<item objectid="4" transform="1 0 0 0 1 0 0 0 1 150 150 0"/></build></model>')
+    cfg = ('<?xml version="1.0" encoding="UTF-8"?>\n<config>\n'
+           + settings(2, 1, 12) + settings(4, 3, 4) + '</config>\n')
+    with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as z:
+        z.writestr("3D/3dmodel.model", root)
+        z.writestr("3D/Objects/object_1.model", mesh(1, cube_v, cube_t))
+        z.writestr("3D/Objects/object_3.model", mesh(3, tet_v, tet_t))
+        z.writestr("Metadata/model_settings.config", cfg)
+    return path
+
+
+@case("meshfix:--put меняет счётчик граней только у своего объекта", tools=("meshfix.py",))
+def _():
+    d = work("meshfix-put-two")
+    src = two_object_3mf(d / "two.3mf")
+    dst = d / "put.3mf"
+    out = run([TOOLS / "meshfix.py", src, "--put", "3", FIX / "ball.stl", "-o", dst])
+    contains(out, "сетка на вход: 1280 треугольников", "записано:")
+    assert "не обновлён" not in out, out
+    zi, zo = zipfile.ZipFile(src), zipfile.ZipFile(dst)
+    assert zo.read("3D/Objects/object_1.model") == zi.read("3D/Objects/object_1.model"), \
+        "сетку чужого объекта тронули"
+    tri = len(re.findall(r"<triangle ", zo.read("3D/Objects/object_3.model").decode()))
+    close(tri, 1280, 0, "граней в подменённой сетке")
+    cfg = zo.read("Metadata/model_settings.config").decode()
+
+    def counts(top):
+        b = re.search(r'<object id="%s">.*?</object>' % top, cfg, re.S).group(0)
+        return (int(re.search(r'<metadata face_count="(\d+)"', b).group(1)),
+                int(re.search(r'<mesh_stat face_count="(\d+)"', b).group(1)))
+    assert counts(2) == (12, 12), f"у нетронутого объекта счётчики {counts(2)}, было (12, 12)"
+    assert counts(4) == (1280, 1280), f"у подменённого счётчики {counts(4)}, ждали (1280, 1280)"
+
 # ------------------------------------------------------------------ meshsolid
 
 @case("meshsolid:пересобирает рваную сферу в замкнутое тело")

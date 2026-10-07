@@ -351,10 +351,18 @@ def put_3mf(project, obj_id, stl, out):
     """Return a repaired mesh into the author's 3MF shell.
 
         Only <vertices> and <triangles> of the object in question change, plus the
-        face counters. Plates, other parts, the preview and the author's print
-        profile stay as they were — the same technique as in
-        skills/3d-modeling/references/foreign-3mf.md. Per-triangle paint is lost
-        in the process: it is bound to triangle numbers.
+        face counters of that one object in Metadata/model_settings.config. Plates,
+        other objects, the preview and the author's print profile stay as they
+        were — the same technique as in skills/3d-modeling/references/foreign-3mf.md.
+        Per-triangle paint is lost in the process: it is bound to triangle numbers.
+
+        `obj_id` is the id of the mesh object inside its .model file (the number
+        `--extract` puts into `__obj<N>.stl`), not the id of the top-level object.
+
+        The STL must already be in the object's LOCAL frame — the coordinates
+        stored in the .model file, before the component and build-item transforms
+        are applied. An STL from `--extract` is in that frame; one exported from
+        the slicer's plate is not, and it would land shifted or rotated.
 """
     import zipfile, shutil, struct, xml.etree.ElementTree as ET, re as _re
     out = out or os.path.splitext(project)[0] + "_fixed.3mf"
@@ -380,36 +388,109 @@ def put_3mf(project, obj_id, stl, out):
     new_v = "".join(fmt(v) for v in verts)
     new_t = "".join(f'<triangle v1="{a}" v2="{b}" v3="{c}"/>' for a, b, c in tris)
 
-    replaced = False
-    with zipfile.ZipFile(project) as zin, zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as zout:
-        for item in zin.infolist():
-            data = zin.read(item.filename)
-            if item.filename.lower().endswith(".model") and b"<mesh>" in data:
-                txt = data.decode("utf-8")
-                pat = _re.compile(r'(<object[^>]*id="' + _re.escape(obj_id) + r'"[^>]*>.*?<mesh>)'
-                                  r'\s*<vertices>.*?</vertices>\s*<triangles>.*?</triangles>\s*(</mesh>)',
-                                  _re.S)
-                new_txt, cnt = pat.subn(
-                    lambda m: m.group(1) + f"<vertices>{new_v}</vertices>"
-                                           f"<triangles>{new_t}</triangles>" + m.group(2), txt)
-                if cnt:
-                    replaced = True
-                    if b"paint_color" in data:
+    # Do not let the lazy match run past </object>: an object without a mesh
+    # (a component wrapper) would otherwise swallow the next object's mesh.
+    pat = _re.compile(r'(<object\s[^>]*?\bid="' + _re.escape(obj_id) + r'"[^>]*>'
+                      r'(?:(?!</object>).)*?<mesh>)'
+                      r'\s*<vertices>.*?</vertices>\s*<triangles>.*?</triangles>\s*(</mesh>)',
+                      _re.S)
+    with zipfile.ZipFile(project) as zin:
+        hits = [i.filename for i in zin.infolist()
+                if i.filename.lower().endswith(".model") and pat.search(zin.read(i.filename).decode("utf-8"))]
+        if not hits:
+            print(f"  !! объект id={obj_id} с сеткой не найден — файл не записан")
+            return 1
+        if len(hits) > 1:
+            print(f"  !! объект id={obj_id} с сеткой есть в нескольких файлах: {', '.join(hits)}")
+            print("     Какой из них менять — неоднозначно, файл не записан.")
+            return 1
+        entry = hits[0]
+        top = _top_object(zin.read("3D/3dmodel.model") if "3D/3dmodel.model" in zin.namelist()
+                          else b"", entry, obj_id)
+
+        with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as zout:
+            for item in zin.infolist():
+                data = zin.read(item.filename)
+                if item.filename == entry:
+                    txt = data.decode("utf-8")
+                    m = pat.search(txt)
+                    if "paint_color" in m.group(0):
                         print("  !! в этом объекте была покраска по треугольникам — она потеряна")
-                    data = new_txt.encode("utf-8")
-            elif item.filename.endswith("model_settings.config"):
-                txt = data.decode("utf-8")
-                txt = _re.sub(r'(<mesh_stat[^>]*face_count=")\d+(")',
-                              lambda m: m.group(1) + str(len(tris)) + m.group(2), txt)
-                data = txt.encode("utf-8")
-            zout.writestr(item, data)
-    if not replaced:
-        print(f"  !! объект id={obj_id} с сеткой не найден — файл записан без подмены")
-        return 1
+                    txt = txt[:m.start()] + m.group(1) + f"<vertices>{new_v}</vertices>" \
+                        f"<triangles>{new_t}</triangles>" + m.group(2) + txt[m.end():]
+                    data = txt.encode("utf-8")
+                elif item.filename.endswith("model_settings.config"):
+                    txt, why = _settings_face_count(data.decode("utf-8"), top, obj_id, len(tris))
+                    if why:
+                        print(f"  !! счётчик граней в model_settings.config не обновлён: {why}")
+                    data = txt.encode("utf-8")
+                zout.writestr(item, data)
     print(f"  записано: {out}")
     print("  Проверить: BambuStudio --info и meshdoctor.py по новому файлу,")
     print("  и обязательно открыть в интерфейсе — CLI и интерфейс читают проект разными ветками.")
     return 0
+
+
+def _top_object(root_xml, entry, obj_id):
+    """Id of the top-level object in 3D/3dmodel.model that owns mesh `obj_id`.
+
+    In a Bambu project the mesh sits in 3D/Objects/*.model and the top-level
+    object only lists it as a <component objectid=… p:path=…>; model_settings.config
+    is keyed by that top-level id. A mesh written straight into 3D/3dmodel.model
+    is its own top-level object."""
+    import xml.etree.ElementTree as ET
+    if entry == "3D/3dmodel.model" or not root_xml:
+        return obj_id
+    root = ET.fromstring(root_xml)
+    for obj in root.iter():
+        if not obj.tag.endswith("}object") and obj.tag != "object":
+            continue
+        for comp in obj.iter():
+            if not comp.tag.endswith("component"):
+                continue
+            path = next((v for k, v in comp.attrib.items() if k.endswith("path")), None)
+            if comp.get("objectid") == obj_id and path and path.lstrip("/") == entry:
+                return obj.get("id")
+    return None
+
+
+def _settings_face_count(cfg, top, part, n):
+    """Set the face counters of one object in model_settings.config.
+
+    Only the <object id="top"> block is touched: the <mesh_stat face_count> of the
+    part whose id is the mesh object id, and the object's <metadata face_count>,
+    which is the sum over its parts, shifted by the same difference. Returns the
+    new text and the reason when nothing could be updated."""
+    import re as _re
+    if top is None:
+        return cfg, "в 3D/3dmodel.model нет объекта, который ссылается на эту сетку"
+    mo = _re.search(r'<object id="%s">.*?</object>' % _re.escape(top), cfg, _re.S)
+    if not mo:
+        return cfg, f'нет блока <object id="{top}">'
+    block = mo.group(0)
+    parts = list(_re.finditer(r'<part id="([^"]*)"[^>]*>.*?</part>', block, _re.S))
+    mp = next((p for p in parts if p.group(1) == part), None)
+    if mp is None and len(parts) == 1:
+        mp = parts[0]
+    old = None
+    if mp is not None:
+        stat = _re.search(r'(<mesh_stat[^>]*face_count=")(\d+)(")', mp.group(0))
+        if stat:
+            old = int(stat.group(2))
+            new_part = mp.group(0)[:stat.start()] + stat.group(1) + str(n) + stat.group(3) \
+                + mp.group(0)[stat.end():]
+            block = block[:mp.start()] + new_part + block[mp.end():]
+    whole = _re.search(r'(<metadata face_count=")(\d+)(")', block)
+    why = None
+    if whole and (old is not None or len(parts) <= 1):
+        total = n if old is None else int(whole.group(2)) - old + n
+        block = block[:whole.start()] + whole.group(1) + str(total) + whole.group(3) \
+            + block[whole.end():]
+    elif whole:
+        why = f"у объекта {top} несколько частей, а счётчика части {part} нет — сумма не пересчитана"
+    if old is None and not whole:
+        why = f"в блоке объекта {top} нет ни mesh_stat, ни face_count"
+    return cfg[:mo.start()] + block + cfg[mo.end():], why
 
 
 if __name__ == "__main__":

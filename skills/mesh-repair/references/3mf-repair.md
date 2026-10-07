@@ -57,8 +57,13 @@ python3 tools/meshfix.py project.3mf --put 1 fixed.stl -o new.3mf
 ```
 
 `--put` replaces the vertices and triangles of one object and corrects
-`face_count` in `mesh_stat`. Plates, previews, secondary parts and the author's
+`face_count` of that object only — its part's `mesh_stat` and the object's own
+`<metadata face_count>`. Plates, previews, other objects and the author's
 `project_settings.config` stay as they were.
+
+`N` is the mesh id inside its `.model` file, the number in `__objN.stl`. The STL
+must be in that mesh's local frame, as `--extract` writes it; an STL exported
+from the slicer's plate carries the placement transforms and lands shifted.
 
 **`--info` does not prove the file will open in the GUI.** That is a separate
 check, by a human at the screen — see `3d-modeling/references/bambu-cli.md`.
