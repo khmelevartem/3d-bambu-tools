@@ -195,16 +195,56 @@ def pieces(m):
 
 
 def save(m, path):
-    """Manifold -> watertight single-body STL (simplify, then pymeshfix)."""
+    """Manifold -> watertight STL with the manifold's own volume.
+
+    The boolean's own mesh first; simplify + pymeshfix only when it does not
+    come out as one closed body. Where the surface touches itself, the file may
+    hold two bodies meeting at an edge - that is the true shape, not a defect. A repair is accepted only if the volume did not
+    move: a hole filled across a concave spot adds material that the part never
+    had, and it then intrudes into its neighbour."""
     import trimesh, pymeshfix
-    for tol in (0.003, 0.005, 0.01):
-        mm = m.simplify(tol).to_mesh()
-        v, f = pymeshfix.clean_from_arrays(np.ascontiguousarray(mm.vert_properties[:, :3], np.float64),
-                                           np.ascontiguousarray(mm.tri_verts, np.int32),
-                                           remove_smallest_components=False)
-        t = trimesh.Trimesh(v, f)
-        if t.is_watertight and t.body_count == 1:
+    want = m.volume()
+    ok = lambda t: (t.is_watertight and t.body_count == 1
+                    and abs(t.volume - want) <= max(0.01, 2e-4 * want))
+    # zero-area slivers are dropped on load and leave holes: collapse them in
+    # manifold itself, with tolerances far below anything printable
+    for tol in (0, 1e-5, 1e-4, 1e-3):
+        mm = (m.simplify(tol) if tol else m).to_mesh()
+        t = trimesh.Trimesh(mm.vert_properties[:, :3].astype(np.float64), mm.tri_verts)
+        if ok(t):
             break
+    if not ok(t):
+        # a pinch: the surface touches itself (a fold closing to a point), and
+        # manifold keeps two vertices there a micron apart. Merged on load they
+        # make edges with four faces. Move each twin towards its own faces.
+        from scipy.spatial import cKDTree
+        mm = m.to_mesh()
+        V = mm.vert_properties[:, :3].astype(np.float64); F = np.asarray(mm.tri_verts, np.int64)
+        pairs = cKDTree(V).query_pairs(1e-5, output_type='ndarray')
+        if len(pairs):
+            tw = np.unique(pairs.ravel())
+            cen = V[F].mean(1); acc = np.zeros_like(V); cnt = np.zeros(len(V))
+            for k in range(3):
+                np.add.at(acc, F[:, k], cen); np.add.at(cnt, F[:, k], 1)
+            d = acc[tw] / cnt[tw, None] - V[tw]
+            V[tw] += 2e-4 * d / (np.linalg.norm(d, axis=1, keepdims=True) + 1e-12)
+            u = trimesh.Trimesh(V, F)
+            # bodies that only touched come apart here, which is the truth
+            if u.is_watertight and abs(u.volume - want) <= max(0.01, 2e-4 * want):
+                u.export(path)
+                return u
+    if not ok(t):
+        for tol in (0.003, 0.005, 0.01):
+            mm = m.simplify(tol).to_mesh()
+            v, f = pymeshfix.clean_from_arrays(np.ascontiguousarray(mm.vert_properties[:, :3], np.float64),
+                                               np.ascontiguousarray(mm.tri_verts, np.int32),
+                                               remove_smallest_components=False)
+            t = trimesh.Trimesh(v, f)
+            if ok(t):
+                break
+        else:
+            print(f"  ВНИМАНИЕ {path}: сетка не сошлась — объём {t.volume:.3f} против {want:.3f} мм³, "
+                  f"замкнута {'да' if t.is_watertight else 'нет'}, тел {t.body_count}")
     t.export(path)
     return t
 

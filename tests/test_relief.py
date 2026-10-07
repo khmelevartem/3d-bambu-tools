@@ -106,3 +106,25 @@ def _():
 def _():
     out = run([TOOL], deps=DEPS, expect=1)
     contains(out, "Cut painted relief out of an organic body")
+
+
+@case("relief_cut:защемление по ребру сохраняется замкнутым и без лишнего объёма")
+def _():
+    # два кубика касаются по ребру: булева операция держит там вершины-близнецы,
+    # при записи они склеиваются в рёбра с четырьмя гранями; ремонт дыр
+    # в таком месте достраивает материал, которого у детали не было
+    d = work("relief_защемление")
+    probe = d / "probe.py"
+    probe.write_text(
+        "import sys, trimesh, manifold3d as mf\n"
+        f"sys.path.insert(0, {str(TOOLS)!r})\n"
+        "import relief_cut as rc\n"
+        "a = mf.Manifold.cube([2, 2, 2]); b = mf.Manifold.cube([2, 2, 2]).translate([2, 2, 0])\n"
+        "m = a + b\n"
+        f"t = rc.save(m, {str(d / 'pinch.stl')!r})\n"
+        f"u = trimesh.load({str(d / 'pinch.stl')!r})\n"
+        "print(f'объём {u.volume:.4f} из {m.volume():.4f}, замкнута {u.is_watertight}')\n",
+        encoding="utf-8")
+    out = run([probe], deps=DEPS)
+    close(num(out, r"объём ([\d.]+) из"), 16.0, 0.01, "объём после записи")
+    contains(out, "замкнута True")
