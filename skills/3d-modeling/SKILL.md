@@ -188,6 +188,11 @@ wall a support stands against it without an interface and leaves next to nothing
 while an inflated side gap is paid for in sideways travel: a 14 mm wheel in a
 15.6 mm slot wanders 0.8 mm and sits crooked.
 
+**A gap measured on the G-code envelope does not prove the part fits.** The
+envelope does not see support residue, sag under overhangs or the bow of a long
+thin axle; a part with nearly a millimetre of gap on paper can still refuse to
+go in. Only a printed test answers that.
+
 **Wall thickness rescales with the nozzle arithmetically. Fits and clearances
 do not** — they were derived by printing at 0.4 and are not a pure function of
 nozzle width. For a part that will print with another nozzle, **print a test

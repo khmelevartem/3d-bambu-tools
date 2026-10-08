@@ -146,6 +146,31 @@ def _():
     close(num(out, r"объединение деталей ([\d.]+) мм³"), 14015.5, 0.5, "объединение")
 
 
+@case("solid_cut:штифт сквозь стенку пойман как выступ", needs=("blender",),
+      tools=("solid_cut.py",))
+def _():
+    # Шар 0..30 по z; цилиндр r 2 до z 35 торчит из макушки на 5 мм.
+    d = work("solid_cut_выступ")
+    run([TOOLS / "solid_cut.py", "cut",
+         spec(d / "s.json",
+              {"src": str(FIX / "ball.stl"),
+               "parts": [
+                   {"name": "низ", "out": str(d / "низ.stl"),
+                    "ops": [{"kind": "plane", "n": [0, 0, 1], "d": 15,
+                             "op": "INTERSECT"}]},
+                   {"name": "верх", "out": str(d / "верх.stl"),
+                    "ops": [{"kind": "plane", "n": [0, 0, -1], "d": -15,
+                             "op": "INTERSECT"},
+                            {"kind": "cyl", "axis": [0, 0, 1], "at": [0, 0, 15],
+                             "t0": 0.0, "t1": 20.0, "r": 2.0, "op": "UNION"}]}]})])
+    out = run([TOOLS / "solid_cut.py", "check", FIX / "ball.stl",
+               d / "низ.stl", d / "верх.stl"])
+    close(num(out, r"выступает за исходное тело: ([\d.]+) мм"), 5.0, 0.3,
+          "выступ штифта над макушкой")
+    assert num(out, r"дальше [\d.]+ мм: (\d+) из", int) > 0, \
+        "торчащие вершины не посчитаны"
+
+
 @case("solid_cut:цилиндрическая ниша убирает свой объём", needs=("blender",),
       tools=("solid_cut.py",))
 def _():

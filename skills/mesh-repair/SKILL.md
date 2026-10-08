@@ -103,9 +103,12 @@ regardless.
 (G2/G3) to a smooth contour and prints them at full speed; a contour of long
 straight chords is not recognised as an arc and the head decelerates at every
 corner. The plastic is identical to the hundredth of a gram, the time is not:
-around a tenth of the original face count it grows by one or two per cent, and
-it keeps growing as the mesh gets coarser. Thin for file size and for the
-running time of the other tools, not for the print.
+around a tenth of the original face count it grows by a few per cent and levels
+off at about a tenth longer however coarse the mesh gets. Thin for file size and
+for the running time of the other tools, not for the print.
+
+**Judge the result by the deviation, not by a flat-shaded render.** Flat shading
+shows facets that lie well under one layer and never reach the plastic.
 
 **A part that mates with another part is thinned with `--strict`.** On sharp
 cut planes and sockets the fast engine welds T-seams and splits shells, and a
@@ -113,7 +116,9 @@ mesh that was closed comes back open — the report says so. The strict engine
 refuses any collapse that would change the topology; it is an order of
 magnitude slower and, on such a part, also the more accurate of the two. Check
 the fit afterwards by cross-sections rather than by the bounding box: a socket
-diameter is what a clearance is spent on.
+diameter is what a clearance is spent on. A part the fast engine has already
+torn is thinned again from the original with `--strict`; the repair flags do
+not remove those non-manifold edges and open holes of their own.
 
 **Thin before painting.** A collapse renumbers every triangle and the paint is
 bound to that numbering. On a project already painted the route is
@@ -161,6 +166,9 @@ slicer fixes for you, not an error; compare volumes instead.
 
 **`manifold = yes` does not mean closed.** That flag covers only non-manifold
 edges; holes appear on a separate `open_edges` line. Read both.
+`number_of_parts` counts pieces joined through manifold edges only, so a few
+non-manifold edges far finer than the nozzle inflate it; the count alone is no
+reason to repair.
 
 **A brush-painted file tears itself, and mends for free.** Saving a project
 bakes strokes into geometry: painted triangles are split, their neighbours are
@@ -173,6 +181,9 @@ rebuild there costs all the paint. Tell it apart and fix it:
    seams;
 3. `fixtjoints.py in.3mf --dry`, then without `--dry`;
 4. `meshdoctor.py` again. Remaining holes are real ones for `weldmesh.py`.
+
+One pass is enough even when `--dry` finds a T-vertex on only a minority of the
+open edges: every stitched face completes the contour of its neighbours.
 
 The `fixtjoints.py` tolerance is in file units and is deliberately tight.
 **Do not widen it blindly** — past a narrow margin it stops meaning "a vertex
@@ -267,7 +278,9 @@ the slicer merges intersecting bodies itself.
 
 **A deliberately grafted piece is also called junk by the verdict**, which
 counts volume and does not know the bodies intersect. Tell them apart by
-overlap, not by size, and never run `--dropjunk` on a graft.
+overlap, not by size, and never run `--dropjunk` on a graft. A slice proves the
+fusion: the inner wall weight stays put and the addition goes to the outer
+wall.
 
 **Add `--dropjunk` after every rebuild** and confirm the body count; a rebuild
 leaves zero-volume crumbs.
@@ -280,16 +293,15 @@ call methods that no longer exist, and the libraries they need are not in the
 usual install line.
 
 **Widening the weld tolerance does not cure non-manifold edges; it breeds
-them.** On a generated figurine 19 non-manifold edges became 22, 54 and 90 as
-the tolerance went 0.005, 0.02, 0.05 mm, while the volume never moved. Welding
-answers "separate sheets that should be one", not "three faces on one edge".
+them** — the count climbs with every step of the tolerance while the volume
+does not move. Welding answers "separate sheets that should be one", not "three
+faces on one edge".
 
 **What does cure a handful of non-manifold edges is local surgery.** Delete
 every face whose centre lies within about one nozzle line of the defective
-edge's midpoint, then fill the hole and recompute normals. On the same figurine
-a 0.4 mm ball around each of 19 edges took out 467 faces and left the mesh
-closed and manifold, with the volume unchanged to the first decimal. A wider
-ball is worse, not safer: at 0.8 mm the patch itself tore open again. Do this
+edge's midpoint, then fill the hole and recompute normals. The mesh comes out
+closed and manifold with the volume unchanged. A wider ball is worse, not safer:
+at two nozzle lines the patch itself tears open again. Do this
 on a local copy and compare the counts; it is a last resort after the ordered
 route above, and it does change the shape inside the ball.
 

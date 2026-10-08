@@ -246,6 +246,18 @@ def _():
              "у нас Bambu Lab A1 0.4 nozzle")
 
 
+@case("figopt:audit не советует прятать промывку в деталь", needs=("bambu",),
+      tools=("figopt.py",))
+def _():
+    d = work("figopt_flush")
+    run([TOOLS / "patch3mf.py", project(), d / "f.3mf",
+         "flush_into_infill=1", "flush_into_objects=1"])
+    out = run([TOOLS / "figopt.py", "audit", d / "f.3mf"])
+    contains(out, "flush_into_infill = 1", "пластика не экономит",
+             "flush_into_objects = 1", "схлопывает многоцветную печать")
+    assert "экономит пластик" not in out, "аудит снова советует промывку в деталь"
+
+
 @case("figopt:colors считает смены филамента", needs=("bambu",), tools=("figopt.py",))
 def _():
     out = run([TOOLS / "figopt.py", "colors", project()])
@@ -275,7 +287,8 @@ def _():
     out = run([TOOLS / "patch3mf.py", project(), d / "o.3mf",
                "layer_height=0.12", "enable_support=1"])
     contains(out, "layer_height: '0.2' -> '0.12'", "enable_support: '0' -> '1'",
-             "записано")
+             "записано", "интерфейс этих правок не увидит",
+             "enable_support, layer_height")
     # правка проверяется чужими глазами — чтением через figopt
     contains(run([TOOLS / "figopt.py", "audit", d / "o.3mf"]), "слой 0.12")
 

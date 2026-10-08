@@ -64,3 +64,14 @@ with zipfile.ZipFile(dst, 'w', zipfile.ZIP_DEFLATED) as zo:
     for it in items:
         zo.writestr(it, data[it.filename])
 print('записано', dst)
+
+# The GUI applies only the keys listed in different_settings_to_system on top of
+# the system preset. Inventing that list breaks opening the file, so it is never
+# written here - only reported.
+dss = cfg.get('different_settings_to_system') or ['']
+listed = set(str(dss[0]).split(';'))
+unseen = sorted(k for k in kv if k not in listed)
+if unseen:
+    print('интерфейс этих правок не увидит — их нет в different_settings_to_system: '
+          + ', '.join(unseen))
+    print('  CLI и slice.sh режут с ними; в интерфейсе выставить руками')

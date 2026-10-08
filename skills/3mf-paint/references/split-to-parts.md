@@ -90,7 +90,8 @@ proves the assembly with three numbers:
 
 - pairwise intersections between parts are zero, or they cannot physically
   meet;
-- the union of the parts does not protrude beyond the original solid;
+- no part vertex lies outside the original surface — a signed distance, so a
+  pin through a wall shows as millimetres;
 - the volume deficit equals the arithmetic of the clearances — **"roughly
   similar" is not a pass.**
 
@@ -914,6 +915,13 @@ sinks below the surface.
 **The fit must be sliding plus glue, never a press fit.** Pressing loads the
 wall across the layers, the weakest axis in FDM.
 
+**A clearance on a finished inlay is changed by moving vertices.** Select the
+wall by face normal, not by height, and return the floor vertices to the floor
+plane by sliding them along the extraction axis.
+
+**Change a fit on the part that is going to be reprinted.** A part already
+printed is the reference the new one must match.
+
 ### The neck of an inlay: measure cross-section, not width
 
 A narrow waist in the zone breaks in the hand, during removal from the bed or
@@ -1098,7 +1106,7 @@ Everything follows from geometry; no coordinates are set by hand.
    normal computed from the loop is arbitrary in itself.
 
 `pivot_joint.py` carries the tolerances: the socket is wider than the pin by
-`fit` per side — tighter in the half that sits under glue, looser in the half
+`fit` across the section, half of it per side — tighter in the half that sits under glue, looser in the half
 that goes on by hand — and the pin is a millimetre shorter than the sum of the
 depths.
 
@@ -1230,11 +1238,18 @@ plane — and the Euler characteristic comes out odd. Running the mesh through
 the solver again separates them, but STL identifies vertices by coordinate and
 they merge back on write. Move each of them a micron along its own normal.
 
-**A part must not stick out of the body it came from.** Sample its vertices
-and take the signed distance to the original mesh: anything positive outside is
-a pin through a wall, or a patch that grew. Do not ask this question with a
-boolean intersection — the two meshes share coplanar faces and the solver
-returns garbage.
+**A part must not stick out of the body it came from.** `check` samples its
+vertices and takes the signed distance to the original mesh: anything positive
+outside is a pin through a wall, or a patch that grew. Do not ask this question
+with a boolean — the two meshes share coplanar faces and the solver returns
+garbage.
+
+**Count self-intersections with a full triangle-triangle test.** Comparing
+vertex signs against a neighbour's plane flags every curved surface — several
+per cent of the faces on a perfect body of revolution.
+
+**Leave an overlap thinner than a layer alone.** Subtracting a film that thin
+creates non-manifold edges, and the slicer never sees the film.
 
 ## Presenting the result
 

@@ -86,6 +86,10 @@ changes, layers per colour and flush cost before any slicing.
 area.** A small detail smeared up the height costs more than a large patch
 confined to one band.
 
+**When flushing is more than half the plastic, start with the flush matrix and
+the layer height.** Walls, infill and ironing together move such a print by a
+few per cent.
+
 Removing a filament is a **paid** lever: the detail it drew disappears with it.
 Squeeze the free levers first, then put the choice to the user with the price
 in grams and hours, and render what will be lost (`paintview.py`, skill
@@ -132,7 +136,7 @@ does not know that.
 
 **Cut transitions into dark; leave transitions into light alone.** An
 under-flush in dark brown is invisible; in a white collar or a skin-tone face
-it shows at once. Halving the column of the dark base colour is safe.
+it shows at once. Start from half the column of the dark base colour.
 
 The global `flush_multiplier` is a poor substitute — it trims the dangerous
 light-bound pairs too. Edit the one column with `patch3mf.py`; the same place
@@ -166,7 +170,10 @@ filament from the project entirely. Check one edit at a time.
 **An edit reaches the GUI only together with `different_settings_to_system`.**
 That key lists what differs from the system preset. Absent, it means the author
 changed nothing; once you edit, it must appear, or the GUI takes the system
-preset and never sees the edit while the CLI reports success.
+preset and never sees the edit while the CLI reports success. The list itself
+is never written by hand — the GUI refuses a file with an invented one — so
+`patch3mf.py` names the edits the GUI will not see, and those are set in the
+GUI.
 
 For a different layer height, lay down a real process profile of that height
 (`resolve_profile.py`) and put your differences on top, rather than overwriting

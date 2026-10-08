@@ -243,6 +243,31 @@ def do_cut(spec):
     print(f'  сумма деталей {sum(out):.3f} мм³')
 
 
+OUT_TOL = 0.01          # mm: a vertex this far outside the source is a real bump
+OUT_SAMPLE = 20000      # vertices per part: enough to catch a pin through a wall
+
+
+def _protrusion(src, parts):
+    """Largest distance of a part vertex outside the source surface."""
+    _, bmesh, _, _ = _bl()
+    from mathutils.bvhtree import BVHTree
+    bm = bmesh.new(); bm.from_mesh(src.data); bm.transform(src.matrix_world)
+    tree = BVHTree.FromBMesh(bm)
+    worst, n_out, n_all = 0.0, 0, 0
+    for p in parts:
+        vs = [p.matrix_world @ v.co for v in p.data.vertices]
+        for v in vs[::max(1, len(vs) // OUT_SAMPLE)]:
+            loc, nrm, _, dist = tree.find_nearest(v)
+            if loc is None:
+                continue
+            n_all += 1
+            if (v - loc).dot(nrm) > 0:
+                worst = max(worst, dist)
+                n_out += dist > OUT_TOL
+    bm.free()
+    return worst, n_out, n_all
+
+
 def do_check(src_path, part_paths):
     bpy, _, _, _ = _bl()
     bpy.ops.wm.read_factory_settings(use_empty=True)
@@ -277,12 +302,11 @@ def do_check(src_path, part_paths):
     print(f'объединение деталей {vu:.3f} мм³ против исходного {V0:.3f} '
           f'({100*(V0-vu)/V0:+.3f} %)')
 
-    big = _copy(src)
-    big.scale = (1.000002,) * 3
-    bpy.context.view_layer.objects.active = big
-    bpy.ops.object.transform_apply(scale=True)
-    outv = _stats(_combine(acc, big, 'DIFFERENCE'))[0]
-    print(f'выступает за исходное тело: {outv:.4f} мм³')
+    # Protrusion is a signed distance, never a boolean: parts share coplanar
+    # faces with the source, and a difference against it returns garbage.
+    out_max, out_n, n_all = _protrusion(src, parts)
+    print(f'выступает за исходное тело: {out_max:.4f} мм, вершин дальше '
+          f'{OUT_TOL} мм: {out_n} из {n_all}')
     print('ИТОГ: ' + ('все пары чистые' if not bad else f'{bad} пар пересекаются'))
 
 

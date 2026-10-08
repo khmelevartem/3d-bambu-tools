@@ -61,6 +61,10 @@ python3 tools/meshfix.py project.3mf --put 1 fixed.stl -o new.3mf
 `<metadata face_count>`. Plates, previews, other objects and the author's
 `project_settings.config` stay as they were.
 
+The object's placement matrix stays too. A new mesh that ends lower or higher
+than the old one leaves the object floating above the plate or sunk into it;
+put it back on the bed with `place3mf.py` after the swap.
+
 `N` is the mesh id inside its `.model` file, the number in `__objN.stl`. The STL
 must be in that mesh's local frame, as `--extract` writes it; an STL exported
 from the slicer's plate carries the placement transforms and lands shifted.

@@ -79,7 +79,9 @@ removing anything.**
 has no faces at the required `--core` depth and cannot be protected that way.
 Smooth everything, then restore the small filaments verbatim from the version
 before smoothing; their own jaggedness is a fraction of the line width and does
-not show.
+not show. A long narrow strip behaves the other way: it vanishes at any
+`--lam`, and pinning its core with `--core` is what keeps it. When a colour
+loses area after smoothing, look for such strips first.
 
 **Bites are cured by morphological closing, not by smoothing.** A wedge biting
 into a zone has a short border, so smoothing keeps it forever. Grow the region
@@ -119,6 +121,8 @@ Generator output carries colour as an image on a UV unwrap, not as
 `paint_color`. **The generator bakes shadows into the texture, so zones do not
 separate by brightness** — shaded skin is darker than lit hair. Use a
 shading-independent feature instead: warmth, `(R − B) / brightness`.
+Bambu Studio's own split of a textured GLB into filaments merges neighbouring
+tones — a silver chain into a grey sweater — so check every zone it returns.
 
 Inside a dark region colour is useless — hair, cloth, shoes and wood differ by
 single units. Isolate those by geometry and **verify by rendering, not by
@@ -132,13 +136,16 @@ the repair is meaningless.
 highlights on a textured surface cross any threshold. Combine brightness with
 relief height above a heavily smoothed copy of the mesh, computed at two
 smoothing scales, taking the maximum: one scale loses thin details, the other
-cannot see thick ones. Effective width then answers the real question, which is
-**what will print at all** — anything below the nozzle line stays in the
+cannot see thick ones. Keep or drop a relief component by its highest point,
+not its average: the rims of torn holes in cloth rise as a low band, a real
+raised detail stands above them. Effective width then answers the real
+question, which is **what will print at all** — anything below the nozzle line stays in the
 background colour.
 
-Texture highlights produce speckle larger than ordinary speckle, which
-smoothing does not take. Remove it with a separate pass giving each undersized
-patch to its longest-bordering neighbour.
+Texture highlights produce speckle larger than ordinary speckle — up to about
+ten square millimetres — which smoothing does not take. Remove it with a
+separate pass giving each undersized patch to its longest-bordering neighbour,
+raising the area threshold in steps.
 
 **This is the one case where a border may end up shorter than the original's.**
 That rule protects an author's drawing; paint derived from a shadowed texture

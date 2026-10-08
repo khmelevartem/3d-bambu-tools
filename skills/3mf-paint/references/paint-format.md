@@ -144,6 +144,7 @@ The slicer loads the file with its own loader and writes the attributes back;
 per-code face counts must match what was marked up.
 
 ```bash
+BS=/Applications/BambuStudio.app/Contents/MacOS/BambuStudio
 "$BS" --export-3mf o.3mf --outputdir "$PWD/out" model.3mf
 unzip -p out/o.3mf 3D/Objects/object_1.model \
   | grep -o 'paint_color="[0-9A-Fa-f]*"' | sort | uniq -c

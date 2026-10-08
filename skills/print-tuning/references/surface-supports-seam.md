@@ -35,11 +35,18 @@ side.** Every degree of margin turns another band of wall into supported
 overhang, and the support leaves its marks there whether the wall needed it or
 not. Measure it as area, not as grams: take the faces a support would touch,
 intersect them with the faces that are exposed in the assembled figure, and
-compare. On one cut-out part at a 0.12 layer, going from a hand-set 40° back to
-the computed 30° cut the support landing on visible surface from 104 mm² to
-35 mm², and at 25° to 13 mm², while `Outer wall` did not move — so the surface
-itself was never touched and the saving is free. The margin belongs on the one
-part that drooped, as a per-object override, not on the whole project.
+compare. Going back to the computed value cuts the support landing on visible
+surface several times over while `Outer wall` does not move, so the saving is
+free. The margin belongs on the one part that drooped, as a per-object
+override, not on the whole project.
+
+**Cutting a part in two to ease its supports does not pay.** Two halves collect
+more support on visible surface than the whole part did.
+
+**A lone tree trunk standing apart from the part snaps on a bed-slinger.** A
+trunk a few millimetres thick in a single wall, rising beside a tall part,
+breaks off as the bed swings. Find such trunks in the preview and give that
+object thicker branches with two walls.
 
 ## Layer height
 
@@ -82,7 +89,9 @@ Two traps guard it:
    `filament_scarf_seam_type` applies and `seam_slope_type` is ignored.
 
 Because of both, **verify in the G-code, not in the setting**: with a scarf,
-outer perimeter extrusions carry a Z change inside the layer.
+outer perimeter extrusions carry a Z change inside the layer. Any G-code parser
+reads arcs as well as lines: Bambu writes curves as `G2`/`G3`, and a parser
+that takes `G1` alone sees every round path in pieces.
 
 ```python
 feat = None
@@ -91,7 +100,8 @@ for line in open(gcode_path, errors="ignore"):
     if line.startswith("; FEATURE:"):
         feat = line[10:].strip()
         continue
-    if feat == "Outer wall" and line.startswith("G1 ") and " E" in line and "E-" not in line:
+    if feat == "Outer wall" and line[:3] in ("G1 ", "G2 ", "G3 ") \
+            and " E" in line and "E-" not in line:
         tot += 1
         if " Z" in line:
             withz += 1

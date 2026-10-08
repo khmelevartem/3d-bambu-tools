@@ -31,9 +31,9 @@ pins laid out in a row.
                 "size":4.0,"depth":[5.0,5.0],"shape":"rect","fit":[0.15,0.3]}]}
 
 It expands into two blind sockets facing each other and one pin. The tolerance
-rules are built in: the socket is wider than the pin by `fit` per side -
-tighter in the half that sits under glue, looser in the half that goes on by
-hand - and **the pin is a millimetre shorter than the sum of the depths**, or
+rules are built in: the socket is wider than the pin by `fit` across the
+section, half of it per side - tighter in the half that sits under glue, looser
+in the half that goes on by hand - and **the pin is a millimetre shorter than the sum of the depths**, or
 it bottoms out before the parts meet and leaves a gap at the visible joint.
 `shape: rect` gives a square section: **a round pin leaves the parts free to
 rotate about it, a square one does not.**

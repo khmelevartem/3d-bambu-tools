@@ -73,12 +73,17 @@ def audit(path):
             "Считать: figopt.py gcode на обеих нарезках")
         if nfil > 4:
             say(WARN, f"филаментов {nfil}, а слотов у AMS lite 4",
-                "раскладку по слотам смотреть в интерфейсе; лимит цветов на A1 "
-                "документацией не подтверждён")
-        for k in ("flush_into_infill", "flush_into_objects"):
-            if str(c.get(k)) == "1":
-                say(HINT, f"{k} = 1", "промывка прячется в деталь — экономит пластик, "
-                                      "но подмешивает цвет внутрь стенок")
+                "второй AMS к A1 не подключается: свести к четырём цветам или "
+                "менять катушку руками. Дешевле всего убрать цвет, который живёт "
+                "на многих слоях при малой площади — figopt.py colors")
+        if str(c.get("flush_into_infill")) == "1":
+            say(HINT, "flush_into_infill = 1",
+                "пластика не экономит: промывка пишется в башню, заполнению "
+                "достаётся только остаток")
+        if str(c.get("flush_into_objects")) == "1":
+            say(WARN, "flush_into_objects = 1",
+                "молча схлопывает многоцветную печать до нескольких смен "
+                "инструмента. Сверить число смен: figopt.py gcode")
 
     # --- what is visible on the surface of a figurine
     if str(c.get("wall_generator")) != "arachne":
