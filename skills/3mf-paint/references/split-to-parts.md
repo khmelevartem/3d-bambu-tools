@@ -35,11 +35,9 @@ free to rotate about it.
 When the part is *meant* to turn — a head, a limb, a lid — invert that rule:
 a round pin along the axis of rotation. **Loosen the fit to 0.10 mm per side
 and no further.** A joint that turns still has to hold the part where it was
-put. Measured on assembled figures: 0.25 per side lets a head on a 6 mm pin
-rock four degrees and the face swings a millimetre; 0.15 per side on a 2 mm
-wrist pin will not hold a raised hand at the height it was left; 0.10 per side
-on 3 and 4.5 mm shoulder pins turns freely and holds. Five more things decide
-whether it turns or wobbles.
+put: wider than that, a head rocks on its pin and a raised hand drops from
+where it was left, while at 0.10 a joint still turns freely. Five more things
+decide whether it turns or wobbles.
 
 **A pin printed lying down comes out fatter, and that is luck, not design.**
 Its underside sags by about a tenth of a millimetre, which turns a loose fit
@@ -66,9 +64,9 @@ part along the axis in steps and confirm the clearance grows monotonically, or
 it cannot be put on at all.
 
 **A pin inside a slender column carries the whole bending moment.** A glued
-butt joint across a column holds only as well as the pin crossing it: a 3 mm
-pin of 3 mm diameter inside a 5.8 mm column snaps the first time the assembled
-piece is dropped. Spend the room on length before diameter — the glued cylinder
+butt joint across a column holds only as well as the pin crossing it: a pin as
+short as it is thin snaps the first time the assembled piece is dropped. Spend
+the room on length before diameter — the glued cylinder
 is what carries the moment, while widening the pin eats the wall it is glued
 to. Make the pin at least as long as the column is wide and keep about a
 millimetre of wall around the socket.
@@ -314,10 +312,9 @@ neighbouring surface, stop cutting and move vertices instead.** A patch of skin
 under an overhanging lapel leaves no room for an outer face, and the boolean
 returns a sieve. Build the part from the model's own faces: copy the zone,
 displace its vertices inward, and close it with a reversed copy plus a rim wall.
-Measured on the same figure — the tie, whose side wall is nearly radial, came
-out genus 3 with a cutter and 41 % of its faces self-intersecting by
-displacement; the neck patch under the lapel came out genus 41 by cutter and
-genus 0 by displacement. The zone decides which tool, not preference.
+A zone with a near-radial side wall is the opposite case: displacement folds
+it onto itself, and the cutter is the cleaner tool there. The zone decides which
+tool, not preference.
 
 **Displace along the surface normal, not along the radius**, and **taper the
 depth to zero at the zone's border** over about a millimetre of geodesic
@@ -446,10 +443,10 @@ vertices of such a boundary instead, with a threshold growing from 0.02 to
 0.45 mm — the holes are tenths of a millimetre across and the welding costs
 a fraction of a cubic millimetre.
 
-**A long, non-convex border makes a fan patch a sail.** Where a trouser leg
-lies against a post for several millimetres of height, the fan spans the gap as
-a flat membrane: a blade sticking out of the sole on one part and a fin
-standing off the post on the other. **Use the mesh library's own hole fill
+**A long, non-convex border makes a fan patch a sail.** Where one part lies
+against another for several millimetres of height, the fan spans the gap as a
+flat membrane: a blade sticking out of one part and a fin standing off the
+other. **Use the mesh library's own hole fill
 instead of a fan** — it triangulates inside the border and invents no centroid,
 and the two halves then add back up to the original volume exactly.
 
@@ -500,12 +497,12 @@ the distance from the strut's own origin to the ring's centre circle.
 
 A limb usually gives several closed borders between the two filaments, and the
 longest one is not always the joint: on a closed fist the border around the
-bore was 92 mm long while the wrist was 24 mm. Fit a plane to every border loop
+bore is several times longer than the wrist. Fit a plane to every border loop
 and score it by **how much surface area ends up on the wrong side of it** —
 area of the cut colour left behind, plus area of the other colour carried
-along. The wrist scored 4.5 %, the bore 17 %. Report the winner's residue with
-the plane: below about 1 % the seam lands where the drawing already was, and a
-few percent means the colour edge will visibly move.
+along. Report the winner's residue with the plane: below about 1 % the seam
+lands where the drawing already was, and a few percent means the colour edge
+will visibly move.
 
 ## Decide the assembly order before placing pins
 
@@ -519,10 +516,10 @@ nothing; re-cutting afterwards does not.
 
 Which half carries which is a free choice, and on a limb the wall decides it.
 A wrist tapers: measure with rays across the axis, stepping along it to the
-full socket depth, and a wall that is 2.3 mm at the cut can be 1.3 mm three
-millimetres in. A socket there breaks through. A pin there only adds material,
-because a symmetric pin grows inward as much as it protrudes, and the forearm
-behind the cut holds a steady 2.9-3.2 mm and takes the socket without
+full socket depth, and a wall that looks sound at the cut can lose half its
+thickness a few millimetres in. A socket there breaks through. A pin there only
+adds material, because a symmetric pin grows inward as much as it protrudes,
+and the forearm behind the cut keeps a steady wall and takes the socket without
 complaint. The symptom of having it backwards is not an obvious hole — it is
 degenerate faces and shells touching along the cylinder.
 
@@ -543,7 +540,7 @@ graft your own cylinder: the protrusion stays, the buried part becomes the
 measured depth minus 0.2 mm.
 
 A thinner pin reaches deeper when the obstacle is a round channel — halving the
-diameter roughly doubled the usable depth in one case. Trading diameter for
+diameter roughly doubles the usable depth. Trading diameter for
 depth is the better deal whenever the joint is glued anyway.
 
 **The buried length is not what holds the joint.** The bond is the pin's
@@ -696,8 +693,7 @@ area for candidate planes before cutting.
   the prism then runs alongside that pocket instead of into it. The price
   grows with the tilt — skin in the relief's shadow along the new axis ends up
   inside the prism. Scan the tilt and pick the one where the pocket clearance
-  holds and the eaten skin is smallest; for a moustache that was 40° down,
-  between straight ahead and the teeth axis.
+  holds and the eaten skin is smallest.
 - **Cut in sequence** (hair, then beard from what is left, then moustache);
   each sheet sees the previous pockets as the rest's surface and keeps its
   margin from them.
@@ -819,19 +815,11 @@ cost little.
 constraint: the first layer, the elephant foot and the support scars then land
 where nothing shows.
 
-For a head the three candidate poses measure like this, on 8350 mm² of
-surface, 1713 of it face:
-
-| pose | first layer | contact hidden under hair | share of the face lying flat | support landing on the face |
-|---|---|---|---|---|
-| crown up | 474 mm² | 0 % | 5 % | 135 mm² |
-| face up | 177 mm² | 100 % | **59 %** | 0 |
-| **crown down** | **341 mm²** | **100 %** | **5 %** | **1 mm²** |
-
-Face-up wins on overhangs and loses the model: more than half the face becomes
-a top surface. Crown-down is the answer — the face stands vertical, the first
-layer sits on the crown under the hair, and the collar the next part seats on
-becomes a flat *top* surface instead of an elephant foot.
+**A head prints crown down.** Face up wins on overhangs and loses the model:
+more than half the face becomes a top surface. Crown up puts the support on the
+face. Crown down keeps the face vertical, the first layer sits on the crown
+under the hair, and the collar the next part seats on becomes a flat *top*
+surface instead of an elephant foot.
 
 **The seat of a joint must never be the first layer.** The flat collar the next
 part rests on is the one face that has to stay flat. Printed as the bottom
@@ -851,8 +839,7 @@ printing it needs one. Cut the back flat, perpendicular to the extraction axis,
 taking off the least that gives a usable footprint — then **flatten the pocket
 floor to match**, or the part no longer touches bottom and is held by the side
 walls and the glue alone. The floor goes one depth-clearance below the cut
-plane: measured by rays from the cut face, that turned a gap of 0.31 mm median
-and 0.82 at worst into 0.050 median, 0.070 at the 95th percentile. Fill the
+plane; measure the gap by rays from the cut face. Fill the
 floor by moving the body's own vertices up to the plane, not by a boolean — the
 patch is a thousand vertices against three quarters of a million faces, and the
 rest of the body keeps its triangulation and its other sockets untouched.
@@ -871,17 +858,17 @@ the part free to wobble from there on, and every layer above goes down crooked.
 **A thin flat part — a tie, a strap, a lapel — is laid flat, not stood up.**
 Standing it up fails even behind a wall of supports.
 
-**A pin that would be the part's only footing belongs to neither part.**
-Printed waist down, a pair of cut-out trousers stood on the two 3 mm pins that
-join them to the shirt: 7 mm² of first layer, and the part tore off the plate.
-Drilling the pins out into blind sockets and printing them as separate dowels
-turned the same pose into 49 mm² on the part's own surface, and cost neither
-mating face anything. When deciding which half a pin grows on, count what the
+**A pin that would be the part's only footing belongs to neither part.** A
+part standing on the pins that join it to its neighbour has a few square
+millimetres of first layer and tears off the plate. Drill the pins out into
+blind sockets and print them as separate dowels: the same pose then stands on
+the part's own surface several times wider, and neither mating face loses
+anything. When deciding which half a pin grows on, count what the
 part stands on without it.
 
-**A pose that is a degree or two off is not that pose.** The same trousers at
-1.9° off vertical had 24 mm² of first layer instead of 49: the patch degenerates
-into a line along one edge. When an orientation is chosen for a flat face or a
+**A pose that is a degree or two off is not that pose.** Two degrees off
+vertical halve the first layer: the patch degenerates into a line along one
+edge. When an orientation is chosen for a flat face or a
 cut plane, set it exactly.
 
 **One failed first layer says nothing about the orientation.** Re-run the same
@@ -1106,9 +1093,9 @@ Everything follows from geometry; no coordinates are set by hand.
    normal computed from the loop is arbitrary in itself.
 
 `pivot_joint.py` carries the tolerances: the socket is wider than the pin by
-`fit` across the section, half of it per side — tighter in the half that sits under glue, looser in the half
-that goes on by hand — and the pin is a millimetre shorter than the sum of the
-depths.
+`fit` across the section, half of it per side — tighter in the half that sits
+under glue, looser in the half that goes on by hand — and the pin is a
+millimetre shorter than the sum of the depths.
 
 ## The tool's own checks
 
