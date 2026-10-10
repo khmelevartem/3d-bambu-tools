@@ -167,6 +167,12 @@ intended, the edit did something else.
 carries the rest of the archive verbatim; `--drop-filament N` removes a
 filament from the project entirely. Check one edit at a time.
 
+Dropping renumbers every reference to the filaments above N: object and part
+extruders, plate filament maps, paint, layer changes. A filament still in use
+is refused; `--into M` hands its objects and paint to M. Which lists are per
+filament is decided by key name, never by length: a 4-corner `printable_area`
+cut down in a 4-filament project leaves the CLI with nothing to slice.
+
 **An edit reaches the GUI only together with `different_settings_to_system`.**
 That key lists what differs from the system preset. Absent, it means the author
 changed nothing; once you edit, it must appear, or the GUI takes the system

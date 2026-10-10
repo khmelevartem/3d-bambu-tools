@@ -10,11 +10,15 @@ slice.sh пишет в work/out в корне проекта — так он у�
 нельзя. Прогон набора затирает там plate_1.gcode, result.json, slice.log
 и превью; work/ по правилам проекта расходная, но знать об этом надо.
 """
+import array
 import json
+import re
 import shutil
+import subprocess
 import zipfile
+from collections import Counter
 
-from harness import case, run, num, close, contains, work, FIX, TOOLS, ROOT
+from harness import case, run, num, close, contains, work, FIX, TOOLS, ROOT, BAMBU
 
 CFG = "Metadata/project_settings.config"
 OUT = ROOT / "work" / "out"          # slice.sh пишет только сюда
@@ -293,13 +297,114 @@ def _():
     contains(run([TOOLS / "figopt.py", "audit", d / "o.3mf"]), "слой 0.12")
 
 
-@case("patch3mf:выкидывает филамент из проекта", needs=("bambu",),
-      tools=("patch3mf.py",))
+def painted_faces(p3mf):
+    """Граней, крашенных целиком в филамент N: {N: число}."""
+    code2fil = {"4": 1, "8": 2, "0C": 3, "1C": 4}
+    with zipfile.ZipFile(p3mf) as z:
+        text = z.read("3D/Objects/object_1.model").decode()
+    found = re.findall(r'paint_color="([0-9A-F]+)"', text)
+    return dict(Counter(code2fil[c] for c in found))
+
+
+def project4():
+    """Шарик на четыре филамента, с матрицей промывки, рамкой
+    different_settings_to_system и картами филаментов стола — так их пишет
+    интерфейс. Четыре нарочно: на стольких же углах стоит printable_area."""
+    if "proj4" not in _CACHE:
+        d = work("_proj4")
+        # зоны шарика 1..2 по граням, вторая половина граней сдвинута на 2
+        raw = (FIX / "ball_zones.npy").read_bytes()
+        head = 10 + int.from_bytes(raw[8:10], "little")
+        z = array.array("i")
+        z.frombytes(raw[head:])
+        z4 = array.array("i", [v + 2 * (i >= len(z) // 2) for i, v in enumerate(z)])
+        (d / "z4.npy").write_bytes(raw[:head] + z4.tobytes())
+        p = d / "p.3mf"
+        run([TOOLS / "make_multicolor_3mf.py", FIX / "ball.stl", d / "z4.npy",
+             "--one-based", "-o", p, "--project"], deps=("trimesh", "numpy"))
+        with zipfile.ZipFile(p) as zin:
+            entries = {it.filename: zin.read(it.filename) for it in zin.infolist()}
+            infos = zin.infolist()
+        cfg = json.loads(entries[CFG])
+        assert len(cfg["filament_colour"]) == 4 and len(cfg["printable_area"]) == 4
+        cfg["different_settings_to_system"] = ["p", "f1", "f2", "f3", "f4", "m"]
+        cfg["inherits_group"] = ["p", "f1", "f2", "f3", "f4", "m"]
+        cfg["flush_volumes_matrix"] = [f"{r}{c}" for r in range(1, 5) for c in range(1, 5)]
+        cfg["flush_volumes_vector"] = [f"v{f}{k}" for f in range(1, 5) for k in (1, 2)]
+        entries[CFG] = json.dumps(cfg, indent=4).encode()
+        ms = entries["Metadata/model_settings.config"].decode()
+        ms = ms.replace('<metadata key="locked" value="false"/>\n',
+                        '<metadata key="locked" value="false"/>\n'
+                        '    <metadata key="filament_maps" value="1 1 1 1"/>\n'
+                        '    <metadata key="filament_volume_maps" value="0 0 0 0"/>\n')
+        entries["Metadata/model_settings.config"] = ms.encode()
+        out = d / "p4.3mf"
+        with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as zout:
+            for it in infos:
+                zout.writestr(it, entries[it.filename])
+        _CACHE["proj4"] = out
+    return _CACHE["proj4"]
+
+
+@case("patch3mf:выкидывает свободный филамент и перенумеровывает остальные",
+      needs=("bambu",), tools=("patch3mf.py",))
 def _():
     d = work("patch3mf_drop")
-    out = run([TOOLS / "patch3mf.py", project(), d / "o.3mf", "--drop-filament", "3"])
-    contains(out, "филамент 3 выкинут: было 3, стало 2")
+    # у трёхцветного шарика краска во 2 и 3, первый свободен
+    before = painted_faces(project())
+    out = run([TOOLS / "patch3mf.py", project(), d / "o.3mf", "--drop-filament", "1"])
+    contains(out, "филамент 1 выкинут: было 3, стало 2")
     contains(run([TOOLS / "figopt.py", "audit", d / "o.3mf"]), "2 филамент(ов)")
+    assert painted_faces(d / "o.3mf") == {1: before[2], 2: before[3]}, \
+        "покраска не съехала на номер вниз"
+
+
+@case("patch3mf:занятый филамент без --into — отказ", tools=("patch3mf.py",),
+      needs=("bambu",))
+def _():
+    d = work("patch3mf_busy")
+    out = run([TOOLS / "patch3mf.py", project(), d / "o.3mf", "--drop-filament", "3"],
+              expect=1)
+    contains(out, "филамент 3 ещё в работе", "покраска:", "--into")
+    assert not (d / "o.3mf").exists(), "файл записан, хотя филамент занят"
+
+
+@case("patch3mf:4 -> 3 -> 2 филамента не режут стол и матрицу", needs=("bambu",),
+      tools=("patch3mf.py",))
+def _():
+    d = work("patch3mf_4to2")
+    src = project4()
+    before = painted_faces(src)
+    run([TOOLS / "patch3mf.py", src, d / "3.3mf", "--drop-filament", "4", "--into", "1"])
+    out = run([TOOLS / "patch3mf.py", d / "3.3mf", d / "2.3mf",
+               "--drop-filament", "3", "--into", "2"])
+    contains(out, "филамент 3 выкинут: было 3, стало 2; его место занял 2")
+    with zipfile.ZipFile(src) as z:
+        old = json.loads(z.read(CFG))
+    with zipfile.ZipFile(d / "2.3mf") as z:
+        cfg = json.loads(z.read(CFG))
+        ms = z.read("Metadata/model_settings.config").decode()
+    # не филаментное — как было, хоть длиной и совпадало с числом филаментов
+    for k in ("printable_area", "head_wrap_detect_zone", "machine_max_speed_x"):
+        assert cfg[k] == old[k], f"{k} урезан: {old[k]} -> {cfg[k]}"
+    assert cfg["filament_colour"] == old["filament_colour"][:2]
+    assert len(cfg["nozzle_temperature"]) == 2
+    assert cfg["flush_volumes_matrix"] == ["11", "12", "21", "22"], cfg["flush_volumes_matrix"]
+    assert cfg["flush_volumes_vector"] == ["v11", "v12", "v21", "v22"]
+    assert cfg["different_settings_to_system"] == ["p", "f1", "f2", "m"]
+    assert cfg["inherits_group"] == ["p", "f1", "f2", "m"]
+    assert re.findall(r'filament_maps" value="([^"]*)"', ms) == ["1 1"]
+    assert re.findall(r'filament_volume_maps" value="([^"]*)"', ms) == ["0 0"]
+    assert re.findall(r'key="extruder" value="(\d+)"', ms) == ["1"]
+    # краска 4 ушла в 1, краска 3 — во 2
+    assert painted_faces(d / "2.3mf") == {1: before[1] + before[4], 2: before[2] + before[3]}
+    # и это режется: при урезанном printable_area CLI выходил без G-кода
+    sd = d / "slice"
+    sd.mkdir()
+    subprocess.run([BAMBU, "--slice", "1", "--outputdir", sd, d / "2.3mf"],
+                   capture_output=True, timeout=600)
+    g = sd / "plate_1.gcode"
+    assert g.exists() and g.stat().st_size > 10_000, "CLI не написал G-код"
 
 
 @case("patch3mf:на файле без настроек — отказ, а не трейсбек", tools=("patch3mf.py",))
