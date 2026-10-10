@@ -254,6 +254,35 @@ def _():
     assert m[0] == "0" and m[-1] == "0", f"диагональ не нулевая: {m[0]}, {m[-1]}"
 
 
+@case("paint:filament при 4 филаментах не растит стол и башню", needs=("bambu",),
+      tools=("paint.py",))
+def _():
+    d = work("paint_filament_collide")
+    run([TOOLS / "paint.py", "filament", ball_project(d), d / "four.3mf", "#E88A28"],
+        deps=PAINT)
+    cfg = config(d / "four.3mf")
+    assert len(cfg["filament_colour"]) == 4 and len(cfg["printable_area"]) == 4
+    # то, что пишет интерфейс: рамка [процесс, филаменты, принтер], матрица,
+    # башня по столам — четыре значения, как и филаментов
+    cfg["different_settings_to_system"] = ["p", "f1", "f2", "f3", "f4", "m"]
+    cfg["flush_volumes_matrix"] = [str(0 if i == j else 140) for i in range(4) for j in range(4)]
+    cfg["wipe_tower_x"] = ["10", "20", "30", "40"]
+    js = json.dumps(cfg, indent=4, ensure_ascii=True).encode("utf-8")
+    src = rewrite(d / "four.3mf", d / "gui.3mf",
+                  lambda name, b: js if name.endswith("project_settings.config") else b)
+    run([TOOLS / "paint.py", "filament", src, d / "five.3mf", "#C12E1F"], deps=PAINT)
+    now = config(d / "five.3mf")
+    for k in ("printable_area", "wipe_tower_x", "machine_max_speed_x"):
+        assert now[k] == cfg[k], f"{k} вырос: {cfg[k]} -> {now[k]}"
+    # новый слот — копия второго
+    assert now["different_settings_to_system"] == ["p", "f1", "f2", "f3", "f4", "f2", "m"], \
+        now["different_settings_to_system"]
+    assert len(now["flush_volumes_matrix"]) == 25
+    assert len(now["nozzle_temperature"]) == 5
+    assert len(now["filament_dev_ams_drying_ams_limitations"]) == 10, \
+        "блок из двух значений на слот не вырос целиком"
+
+
 # -------------------------------------------------------------------- paint_despeckle.py
 @case("paint_despeckle:на чистой покраске чистить нечего",
       tools=("paint_despeckle.py",))

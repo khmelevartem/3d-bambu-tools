@@ -80,10 +80,11 @@ default_filament_colour enable_overhang_bridge_fan enable_pressure_advance filam
 filament_colour_type filament_ids filament_is_mixed filament_map filament_mixed_components
 filament_mixed_gradient filament_mixed_gradient_curve filament_mixed_gradient_per_part
 filament_mixed_gradient_range filament_mixed_sublayer_ratios filament_multi_colour
-filament_nozzle_map filament_self_index filament_volume_map first_x_layer_part_fan_speed
-flush_volumes_vector ironing_fan_speed overhang_threshold_participating_cooling
-pressure_advance
+filament_self_index first_x_layer_part_fan_speed flush_volumes_vector ironing_fan_speed
+overhang_threshold_participating_cooling pressure_advance
 '''.split())
+# filament_nozzle_map and filament_volume_map look per filament but are not: saved
+# projects carry 4, 5, 7 or 12 entries whatever the filament count. Left alone.
 # Keys of a preset dump that are not settings at all.
 PRESET_META = {'type', 'from', 'name', 'inherits', 'instantiation', 'setting_id', 'include',
                'description', 'version', 'is_custom_defined', 'filament_id',
@@ -98,6 +99,7 @@ NUMBER_KEY = re.compile(r'^(?:wall|sparse_infill|solid_infill|support|support_in
 
 
 def filament_keys():
+    """Names of the per-filament keys of a project config."""
     keys = FILAMENT_PRESET_KEYS | FILAMENT_PROJECT_KEYS
     for p in (PROFILES / 'filament').rglob('*.json') if PROFILES.is_dir() else ():
         try:

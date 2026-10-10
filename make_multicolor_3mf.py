@@ -304,7 +304,7 @@ def build_project_settings(filaments, printer: str, process: str) -> bytes:
         straight from the config — and segfaults on a trimmed one before slicing
         even starts. With the full profile `--export-3mf` and `--slice` both work.
 
-        A profile's filament values are lists of one slot; for N slots they must be
+        A profile's filament values are lists for one slot; for N slots they must be
         replicated, or the slicer takes the settings of the first slot only.
 """
     rp = load_profiles()
@@ -320,9 +320,11 @@ def build_project_settings(filaments, printer: str, process: str) -> bytes:
     for key, val in per_filament[0].items():
         if key in not_per_slot:
             continue
-        if isinstance(val, list) and len(val) == 1:
-            cfg[key] = [p.get(key, val)[0] if isinstance(p.get(key, val), list)
-                        else p.get(key) for p in per_filament]
+        if isinstance(val, list):
+            # a slot is one entry or a block of them (2 per nozzle flow, 4 per drying mode)
+            cfg[key] = [x for p in per_filament
+                        for x in (p.get(key, val) if isinstance(p.get(key, val), list)
+                                  else [p.get(key)])]
         else:
             cfg[key] = val
 

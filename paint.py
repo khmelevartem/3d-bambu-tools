@@ -473,11 +473,15 @@ def cmd_write(a):
 # ALL of them must be extended - leave one at the old length and Bambu Studio
 # reads past the end of a vector. The CLI stays silent and returns 0, while the
 # GUI reports an invalid configuration and then no geometry data.
-DENY_PREFIX = ('machine_max_', 'extruder_', 'printer_extruder')
-DENY = {'printable_area', 'bed_exclude_area', 'print_compatible_printers', 'nozzle_diameter',
-        'thumbnails', 'bed_custom_texture', 'bed_custom_model', 'wipe_tower_x', 'wipe_tower_y',
-        'flush_volumes_matrix',                      # N x N, rebuilt separately
-        'filament_nozzle_map', 'filament_volume_map'}  # fixed 9 slots
+# Which keys those are is decided by name, as in patch3mf.py: by length alone,
+# printable_area, machine_max_* and wipe_tower_x get grown whenever N divides them.
+def schema():
+    import importlib.util
+    spec = importlib.util.spec_from_file_location(
+        'patch3mf', os.path.join(os.path.dirname(os.path.abspath(__file__)), 'patch3mf.py'))
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod.filament_keys(), mod.FRAMED_KEYS
 
 
 def cmd_filament(a):
@@ -491,10 +495,19 @@ def cmd_filament(a):
     cfg = json.loads(zin.read(cfgname))
     n = len(cfg['filament_colour'])
     SRC = min(1, n - 1)                              # which filament to copy from
-    grown = []
+    fk, framed = schema()
+    grown, odd = [], []
     for k, v in cfg.items():
         if not isinstance(v, list) or not v: continue
-        if k in DENY or k.startswith(DENY_PREFIX) or len(v) % n: continue
+        if k in framed:                              # [process, filaments, printer]
+            if len(v) == n + 2:
+                v.insert(n + 1, v[SRC + 1]); grown.append(1)
+            else:
+                odd.append(f'{k}[{len(v)}]')
+            continue
+        if k not in fk: continue
+        if len(v) % n:
+            odd.append(f'{k}[{len(v)}]'); continue
         b = len(v) // n
         if k == 'filament_self_index':               # holds its own number
             v.extend([str(n + 1)] * b)
@@ -522,10 +535,8 @@ def cmd_filament(a):
     else:
         print('матрицы промывки в проекте нет — оставлена слайсеру')
 
-    left = [(k, len(v)) for k, v in cfg.items() if isinstance(v, list) and v
-            and k not in DENY and not k.startswith(DENY_PREFIX)
-            and len(v) % n == 0 and len(v) % (n + 1)]
-    assert not left, f'остались списки старой длины: {left}'
+    if odd:
+        print('не тронуты, длина не ложится на число филаментов: ' + ', '.join(odd))
 
     ms = zin.read('Metadata/model_settings.config').decode('utf-8')
     for key, add in (('filament_maps', '1'), ('filament_volume_maps', '0')):
