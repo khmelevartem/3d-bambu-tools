@@ -188,7 +188,7 @@ def _mesh_on_plate(path):
     t1, t2, t3, lab = [], [], [], []
     for m in paint.TRI.finditer(raw):
         t1.append(m.group(1)); t2.append(m.group(2)); t3.append(m.group(3))
-        lab.append(paint.CODE2FIL.get((m.group(4) or "").upper(), paint.SPLIT))
+        lab.append(paint.CODE2FIL.get(paint.code_of(m), paint.SPLIT))
     F = np.array([t1, t2, t3], dtype=np.int64).T
     lab = np.array(lab, dtype=np.int8)
 

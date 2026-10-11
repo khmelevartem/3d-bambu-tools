@@ -22,8 +22,27 @@ import numpy as np
 CODE2FIL = {'': 1, '4': 1, '8': 2, '0C': 3, '1C': 4, '2C': 5, '3C': 6, '4C': 7}
 FIL2CODE = {v: k for k, v in CODE2FIL.items() if k}
 SPLIT = -1                      # triangle painted with the brush in several colours
-TRI = re.compile(r'<triangle v1="(\d+)" v2="(\d+)" v3="(\d+)"'
-                 r'(?:\s+paint_color="([0-9A-Fa-f]+)")?\s*/>')
+# A face carries any set of brush attributes besides its vertices:
+# paint_color (filaments), paint_supports (support enforcer/blocker),
+# paint_seam - in any combination and order. Group 4 is all of them verbatim;
+# the filament code comes out of it through code_of().
+TRI = re.compile(r'<triangle v1="(\d+)" v2="(\d+)" v3="(\d+)"((?:\s+[\w:]+="[^"]*")*)\s*/>')
+PAINT = re.compile(r'(\spaint_color=")([^"]*)(")')
+
+
+def code_of(m):
+    """Upper-cased paint_color of a TRI match, '' when the face has none."""
+    p = PAINT.search(m.group(4))
+    return p.group(2).upper() if p else ''
+
+
+def with_code(m, code):
+    """The TRI match with paint_color set to code; every other byte untouched."""
+    s, a0, a1 = m.group(0), m.start(4) - m.start(0), m.end(4) - m.start(0)
+    attrs = m.group(4)
+    attrs = (PAINT.sub(lambda p: p.group(1) + code + p.group(3), attrs, count=1)
+             if PAINT.search(attrs) else attrs + f' paint_color="{code}"')
+    return s[:a0] + attrs + s[a1:]
 VERT = re.compile(r'<vertex x="([^"]*)" y="([^"]*)" z="([^"]*)"\s*/>')
 
 
@@ -183,7 +202,7 @@ def cmd_explode(a):
     tri, lab, split = [], [], 0
     for m in TRI.finditer(raw):
         idx = [int(m.group(i)) for i in (1, 2, 3)]
-        code = (m.group(4) or '').upper()
+        code = code_of(m)
         if code in CODE2FIL:
             tri.append(V0[idx])
             lab.append(ext if code == '' else CODE2FIL[code])
@@ -230,7 +249,7 @@ def cmd_parse(a):
     t1, t2, t3, lab = [], [], [], []
     for m in TRI.finditer(raw):
         t1.append(m.group(1)); t2.append(m.group(2)); t3.append(m.group(3))
-        lab.append(CODE2FIL.get((m.group(4) or '').upper(), SPLIT))
+        lab.append(CODE2FIL.get(code_of(m), SPLIT))
     F = np.array([t1, t2, t3], dtype=np.int64).T
     lab = np.array(lab, dtype=np.int8)
 
@@ -441,7 +460,7 @@ def cmd_write(a):
 
     def sub(mm):
         i = st['i']; st['i'] = i + 1
-        old = (mm.group(4) or '').upper()
+        old = code_of(mm)
         new = int(lab[i])
         split = old not in CODE2FIL
         if split and not a.collapse_splits:
@@ -449,8 +468,7 @@ def cmd_write(a):
         if not split and CODE2FIL[old] == new:
             st['same'] += 1; return mm.group(0)
         st['collapsed' if split else 'recol'] += 1
-        return (f'<triangle v1="{mm.group(1)}" v2="{mm.group(2)}" v3="{mm.group(3)}"'
-                f' paint_color="{FIL2CODE[new]}"/>')
+        return with_code(mm, FIL2CODE[new])
 
     out = TRI.sub(sub, raw)
     assert st['i'] == len(lab), f'треугольников в файле {st["i"]}, меток {len(lab)}'

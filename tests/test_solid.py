@@ -7,7 +7,7 @@ solid_cut, pivot_joint, balljoint, graft, partedit, place3mf, set_extruder.
 находятся голосованием по нормалям с правильным диаметром, а правка 3MF
 частями и перестановка на столе не теряют ни одной покрашенной грани.
 """
-import json, struct
+import json, re, struct, zipfile
 
 from harness import case, run, num, close, contains, work, FIX, TOOLS
 
@@ -421,6 +421,23 @@ def _():
                - num(было, r"филамент 2: (\d+) граней"))
     close(прирост, num(стало, r"граней (\d+),") - num(было, r"граней (\d+),"), 0,
           "прирост граней ушёл не только во второй филамент")
+
+
+@case("graft:читает грани с кистью поддержек", tools=("graft.py",))
+def _():
+    d = work("graft_кисть")
+    src = painted("figurine")
+    z = zipfile.ZipFile(src)
+    with zipfile.ZipFile(d / "brush.3mf", "w") as zo:
+        for it in z.infolist():
+            b = z.read(it.filename)
+            if it.filename.endswith(".model"):
+                b = re.sub(rb'(<triangle [^>]*?)\s*/>', rb'\1 paint_supports="4"/>', b)
+            zo.writestr(it.filename, b)
+    out = run([TOOLS / "graft.py", "section", d / "brush.3mf",
+               "--at", "9,0,52", "--dir", "1,0,0", "--max", "6"],
+              deps=("numpy", "scipy"))
+    close(num(out, r"ширина ([\d.]+) ×"), 5.2, 0.05, "ширина сечения руки")
 
 
 @case("graft:в пустой плоскости честно отказывается", tools=("graft.py",))

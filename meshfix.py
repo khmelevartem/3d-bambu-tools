@@ -416,6 +416,8 @@ def put_3mf(project, obj_id, stl, out):
                     m = pat.search(txt)
                     if "paint_color" in m.group(0):
                         print("  !! в этом объекте была покраска по треугольникам — она потеряна")
+                    if "paint_supports" in m.group(0) or "paint_seam" in m.group(0):
+                        print("  !! кисть поддержек или шва на треугольниках тоже потеряна")
                     txt = txt[:m.start()] + m.group(1) + f"<vertices>{new_v}</vertices>" \
                         f"<triangles>{new_t}</triangles>" + m.group(2) + txt[m.end():]
                     data = txt.encode("utf-8")

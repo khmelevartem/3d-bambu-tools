@@ -37,7 +37,7 @@ existing bodies. Prove the merge by slicing - `Inner wall` must not grow.
 import argparse, os, re, sys, zipfile
 import numpy as np
 
-TRI = re.compile(r'<triangle v1="(\d+)" v2="(\d+)" v3="(\d+)"(?:\s+paint_color="([^"]*)")?\s*/>')
+TRI = re.compile(r'<triangle v1="(\d+)" v2="(\d+)" v3="(\d+)"((?:\s+[\w:]+="[^"]*")*)\s*/>')
 VTX = re.compile(r'<vertex x="([^"]+)" y="([^"]+)" z="([^"]+)"\s*/>')
 FIL2CODE = {1: '4', 2: '8', 3: '0C', 4: '1C', 5: '2C', 6: '3C', 7: '4C'}
 

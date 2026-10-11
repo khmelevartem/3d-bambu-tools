@@ -195,6 +195,67 @@ def _():
     close(num(out, r"открытых рёбер (\d+)"), 0, 0, "открытых рёбер")
 
 
+TRI_RE = re.compile(r'<triangle [^>]*/>')
+PC_RE = re.compile(r' paint_color="([^"]*)"')
+
+
+def brushed(src, dst):
+    """The ball with the support and seam brushes laid over its paint, the way
+    Bambu Studio writes them: before or after paint_color, or with no
+    paint_color at all. Every second filament code is swapped, so a write back
+    with the original labels has to replace a code and to add a missing one."""
+    def tri(i, t):
+        if i % 4 == 1:          # supports before the colour
+            return t.replace(' paint_color=', ' paint_supports="4" paint_color=')
+        if i % 4 == 2:          # seam after the colour, colour swapped
+            t = re.sub(r'paint_color="(8|0C)"',
+                       lambda m: 'paint_color="%s"' % ("0C" if m.group(1) == "8" else "8"), t)
+            return t.replace('/>', ' paint_seam="8"/>')
+        if i % 4 == 3:          # both brushes, no colour at all
+            return PC_RE.sub(' paint_supports="8" paint_seam="4"', t)
+        return t
+
+    def edit(name, b):
+        if not name.endswith(".model"):
+            return b
+        n = iter(range(10 ** 9))
+        return TRI_RE.sub(lambda m: tri(next(n), m.group(0)), b.decode()).encode()
+    return rewrite(src, dst, edit)
+
+
+def triangles(path):
+    z = zipfile.ZipFile(path)
+    return TRI_RE.findall(z.read("3D/Objects/object_1.model").decode())
+
+
+@case("paint:кисть поддержек и шва не съедает грани, запись хранит её дословно",
+      tools=("paint.py",))
+def _():
+    d = work("paint_brushes")
+    plain = ball_3mf(d)
+    src = brushed(plain, d / "brushed.3mf")
+    tri = triangles(src)
+    assert sum("paint_supports" in t for t in tri) == 640, "фикстура собрана не так"
+    assert sum("paint_color" not in t for t in tri) == 320, "фикстура собрана не так"
+
+    out = run([TOOLS / "paint.py", "parse", src, d / "b.npz"], deps=PAINT)
+    close(num(out, r"граней (\d+)"), 1280, 0, "граней с кистью")
+    close(num(out, r"филамент 1: (\d+) граней"), 320, 0, "граней без paint_color")
+    out = run([TOOLS / "paint.py", "explode", src, d / "e.npz"], deps=PAINT)
+    contains(out, "дроблёных граней 0 -> подтреугольников 1280, вершин 642")
+    close(num(out, r"открытых рёбер (\d+)"), 0, 0, "открытых рёбер")
+
+    # the labels of the clean ball, written over the brushed one
+    run([TOOLS / "paint.py", "parse", plain, d / "p.npz"], deps=PAINT)
+    out = run([TOOLS / "paint.py", "write", src, d / "p.npz", d / "back.3mf"], deps=PAINT)
+    contains(out, "без изменений 640, перекрашено 640")
+    back = triangles(d / "back.3mf")
+    assert [PC_RE.sub("", t) for t in back] == [PC_RE.sub("", t) for t in tri], \
+        "кисть поддержек или шва изменилась при записи"
+    assert [PC_RE.findall(t) for t in back] == [PC_RE.findall(t) for t in triangles(plain)], \
+        "коды филаментов не вернулись к исходным"
+
+
 @case("paint:filament на файле без настроек объясняет, а не падает", tools=("paint.py",))
 def _():
     d = work("paint_filament_bare")

@@ -14,6 +14,13 @@ triangle's subdivision. On an unsplit triangle it is a state code:
 
 For filament N ≥ 3 the form is `hex(N-3) + "C"`, up to N = 17.
 
+**`paint_color` is not the only brush on a face.** The support
+enforcer/blocker brush writes `paint_supports`, the seam brush `paint_seam`,
+in any order next to `paint_color` or without it. A reader that expects
+`v1 v2 v3` plus at most `paint_color` silently skips those faces and the mesh
+comes out with holes. Match any attribute set; on write, replace or add
+`paint_color` only and keep the other attributes byte for byte.
+
 ## A face without the attribute is "state 0"
 
 It prints with the filament assigned to the object in `model_settings.config`
