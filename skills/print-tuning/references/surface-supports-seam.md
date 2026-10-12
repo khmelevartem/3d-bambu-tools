@@ -48,6 +48,15 @@ trunk a few millimetres thick in a single wall, rising beside a tall part,
 breaks off as the bed swings. Find such trunks in the preview and give that
 object thicker branches with two walls.
 
+Judge a trunk by its narrowest neck: the support path length per layer of one
+connected cluster, read from the G-code with arcs (`G2`/`G3`) included. A neck
+of about 35 mm per layer still snaps under an overhang 15–20 mm above the bed;
+aim for 60 or more. Per object, `tree_support_branch_diameter = 10` with
+`tree_support_wall_count = 2` gives that for a fraction of a gram. Going larger
+merges branches differently and thins the neck again — measure, do not
+extrapolate. Tilting the part leaves the neck where it was, and normal support
+in its place stands on thin pillars, so neither replaces thicker branches.
+
 ## Layer height
 
 The width of a step on the surface is `layer height / tan(angle to

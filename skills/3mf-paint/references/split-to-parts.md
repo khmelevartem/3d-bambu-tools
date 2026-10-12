@@ -821,10 +821,25 @@ face. Crown down keeps the face vertical, the first layer sits on the crown
 under the hair, and the collar the next part seats on becomes a flat *top*
 surface instead of an elephant foot.
 
-**The seat of a joint must never be the first layer.** The flat collar the next
-part rests on is the one face that has to stay flat. Printed as the bottom
-layer it domes, and the part then hangs on its pin and rocks instead of sitting
-on the collar.
+**The seat of a joint is not the first layer when there is a choice.** The flat
+collar the next part rests on is the one face that has to stay flat. Printed as
+the bottom layer it domes, and the part then hangs on its pin and rocks instead
+of sitting on the collar. A part with a plug therefore stands on the plug's end
+and leaves the collar to the support. The footing outranks this rule: a part
+that tears off the plate has no seat at all.
+
+**Supports may land on a mating face.** A face-to-face joint, or the shoulder
+and walls of a plug several millimetres across, comes off its supports rough,
+and a knife and a pass of sandpaper bring it back in a minute; the seam hides
+what is left. A clean seat is never worth a smaller first layer: stand the part
+on its cut side — on the plug's end — and let the support take the seat. This
+does not extend to an inlay's side walls or a small pin — a fit of 0.05–0.2 mm
+has nothing to trim, and a scar there becomes play or a jam.
+
+**The cut side is the footing, not the end of a limb.** A part about 20 mm
+tall standing on under 50 mm² of a trouser leg or a sleeve end tears off the
+plate halfway up. On its cut side the same part has several times the first
+layer and prints clean, supports under the seat included.
 
 **An inlay is laid down by its extraction axis, not by its largest flat
 facet.** The pocket's side wall is prismatic, so one of its facets is often the
