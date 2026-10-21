@@ -558,6 +558,58 @@ comes from the part's own size — about 3 mm at Ø4. The diameter is limited no
 by the part but by **the mating body's wall at its narrowest point**: measure it
 with sections parallel to the cut plane before choosing it.
 
+### A boss on a torn body: clear by depth under the visible surface
+
+A horn, an ear or a spike growing out of a generated head sits on a ring of
+loose fragments, the part's own inner shells and the skin it covers. Beside it,
+just below the surface, are things that must survive: a brow niche, a fold, a
+tunnel that another part's tongue goes into. Work in the part's frame: the axis
+`d` of its base, the radius around it, the height along it.
+
+- **Delete by depth, not by radius.** Over every face inside the clearing
+  cylinder, cast a ray along `−d` and take the first hit on non-part faces.
+  Delete only faces within about 0.45 mm under that hit, plus loose fragments
+  and part-coloured faces inside the cylinder. Anything deeper — a niche, a
+  pocket, a tunnel — stays untouched.
+- **A back face hit first is a cavity ceiling.** When the first hit from above
+  faces down (`n·d < −0.3`) and lies more than 0.3 mm below the skin around the
+  cylinder, that face and everything under it in the column are walls of a
+  cavity hidden under the part: neither cut nor deleted. A back face standing
+  level with or above the surrounding skin is a stray flap, and it goes.
+- **Loose fragments lying on the surface count as surface when they are used
+  as a reference.** Take the new skin's target heights from the first
+  non-part hit *including* fragments; without them the rays fall through the
+  gaps into the layer underneath, and the new skin sinks into a false funnel
+  around the part — the socket then looks deep only because the seam has
+  dropped. Discard any target sample more than about 0.6 mm above or below the
+  rim of the hole at the same angle.
+- **Recolouring a part's wall by its normal needs a visibility test.** Faces
+  facing outward from the axis look like the part's wall, and so do the inner
+  walls of a tunnel beside it. Cast a ray along each candidate's normal;
+  blocked by the body within 1.5 mm means a cavity wall, which keeps its
+  colour.
+- **The rim of the new skin is the cut at the surface only.** Cut edges that lie
+  more than about 0.35 mm under the visible surface belong to a cavity wall the
+  cylinder grazed; leave them open and keep them out of the rim, or the rim
+  dives into the cavity and the skin follows it.
+- **The seam is a circle of the part's own radius at the seam.** Fit the radius
+  on the part's surface 0–0.3 mm above the seam, not lower down the base. Ease
+  the part's surface onto the circle over about 0.8 mm, low-passing its radius
+  around the axis and adding the ripple back, so grooves on the part still run
+  into the seam.
+- **The socket floor is a tilted plane chosen by a linear program.** Maximise
+  the shallowest sleeve depth under the seam, then the mean, subject to a roof
+  over every cavity under the floor and a tilt limit of about 40° (the part
+  prints standing on that floor). A tilted floor keys the part against turning.
+  Where a niche and a tunnel pin the floor from both sides, the sleeve stays
+  shallow; say its depth out loud instead of deepening it into a cavity.
+- **A roof over a cavity is at least one nozzle line thick** (`hardware.py`).
+  A thinner bridge is dropped by the slicer, the socket opens into the cavity,
+  and glue runs into the space reserved for the next part.
+- **Where the sleeve under the seam comes out shallower than 0.1 mm**, raise the
+  seam itself by harmonic interpolation along the rim rather than leave a knife
+  edge; name the lift and the arc it covers.
+
 ## When the colour comes from overlapping bodies
 
 A model may be coloured not with the brush but as several overlapping bodies,
@@ -1156,6 +1208,12 @@ through a mesh of hundreds of thousands of faces breaks and reports a vertex
 buried millimetres deep where a boolean finds nothing. Parts pressed face to
 face are judged by volume balance and by point sampling; parts held apart by a
 clearance are judged by the boolean.
+
+**On an open mesh, test triangles against triangles.** A torn body has no
+inside, so both the boolean and ray parity answer noise there. Collide the
+surfaces directly — `python-fcl` with a BVH of each mesh — for static
+intersections, for the removal sweep and for the minimum clearance; it needs no
+closed shells.
 
 **Never measure a wall as the distance to the nearest vertex.** On a seated
 figure the nearest vertex to a wrist axis can be a coat flap rather than the
