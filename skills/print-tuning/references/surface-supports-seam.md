@@ -88,16 +88,11 @@ them up dead centre and is usually worse.
 with a gradual rise in Z, leaving no column of dots, and it costs minutes on a
 multi-hour print.
 
-Two traps guard it:
+One trap guards it: `seam_slope_type` takes `none` / `external` / `all`. The
+GUI labels read as None / Outer perimeter / Outer perimeter and holes, and
+writing `contour` from the label makes the CLI return `none` silently.
 
-1. `seam_slope_type` takes `none` / `external` / `all`. The GUI labels read as
-   None / Outer perimeter / Outer perimeter and holes, and writing `contour`
-   from the label makes the CLI return `none` silently.
-2. **The filament setting wins over the process setting.** While
-   `override_filament_scarf_seam_setting = 0`, the filament profile's
-   `filament_scarf_seam_type` applies and `seam_slope_type` is ignored.
-
-Because of both, **verify in the G-code, not in the setting**: with a scarf,
+So **verify in the G-code, not in the setting**: with a scarf,
 outer perimeter extrusions carry a Z change inside the layer. Any G-code parser
 reads arcs as well as lines: Bambu writes curves as `G2`/`G3`, and a parser
 that takes `G1` alone sees every round path in pieces.

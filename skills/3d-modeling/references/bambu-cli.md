@@ -41,10 +41,6 @@ experiment, so re-check it rather than trusting it blindly.
 9. **`curr_bed_type` defaults to a cold plate type**, and the bed then heats
    far below what PLA on a textured PEI plate needs. Write the real plate into
    the process profile. `slice.sh` substitutes it from `hardware.json`.
-10. **Some settings live in the filament profile and override the process
-    profile.** The scarf seam is the known case: while
-    `override_filament_scarf_seam_setting = 0`, `filament_scarf_seam_type` from
-    the filament wins and `seam_slope_type` from the process is ignored.
 
 **Hence the rule: after slicing, read what was actually applied** — not the
 profile you handed in, but the config inside the finished project:
@@ -83,8 +79,7 @@ without the key slicing fails as incompatible.
 ## Handing over a painted project so that it opens
 
 **A project whose `project_settings.config` was assembled in code does not open
-in the GUI.** Neither re-exporting it through the CLI nor supplying a
-hand-written `different_settings_to_system` changes that.
+in the GUI**, and re-exporting it through the CLI does not change that.
 
 The route that works:
 
@@ -106,20 +101,14 @@ The route that works:
 3. Send settings **into their file** with `tools/retune_project.py`, which
    carries values over from a reference project and changes nothing structural.
 
-**Never invent `different_settings_to_system`.** That single key is the
-difference between a file that opens and one that does not; everything else may
-be byte-identical.
+**The GUI takes the system preset and overlays only the keys listed in
+`different_settings_to_system`.** A setting changed in a saved project reaches
+the GUI once its key is added to that list, which is what Bambu Studio itself
+does on save. `patch3mf.py` and `retune_project.py` add every key they change;
+a key set in code without it reaches the CLI slice only.
 
-The keys listed there are not ours either — a person set them by hand, and a
-reference project carries its own decisions for the same keys.
-`retune_project.py` preserves them; without that, a settings port wipes their
-work.
-
-**Say this consequence out loud:** the GUI takes the system preset and overlays
-only the keys from that list. Edits absent from it do reach a CLI slice, but
-the person will not see them in the GUI. Numbers from `slice.sh` and
-`figopt.py` on such a file therefore describe the CLI slice, not what the GUI
-will show.
+The keys already listed are the person's own edits. `retune_project.py` leaves
+their values alone; without that, a settings port wipes their work.
 
 **A person saves the file several times in a row.** Check the file's
 modification time before building on it, and afterwards compare a fingerprint —

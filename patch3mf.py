@@ -311,6 +311,29 @@ def drop_filament(data, cfg, drop, into):
     return 0
 
 
+def mark_edited(cfg, keys):
+    """List edited keys in different_settings_to_system, as the GUI does on save.
+
+    The GUI takes the system preset and overlays the keys from this list, one
+    entry per preset: process first, then each filament, printer last. A key
+    missing from the list is replaced by the system value on opening.
+    """
+    keys = [k for k in keys if not k.endswith('_settings_id')]
+    if not keys:
+        return
+    dss = list(cfg.get('different_settings_to_system') or [''])
+    n_fil = len(cfg.get('filament_settings_id') or [])
+    while len(dss) < n_fil + 2:
+        dss.insert(len(dss) - 1 if len(dss) > 1 else len(dss), '')
+    for k in keys:
+        slots = range(1, 1 + n_fil) if k in FILAMENT_PRESET_KEYS else [0]
+        for i in slots:
+            have = [x for x in dss[i].split(';') if x]
+            if k not in have:
+                dss[i] = ';'.join(sorted(have + [k]))
+    cfg['different_settings_to_system'] = dss
+
+
 def main(argv):
     if {'-h', '--help'} & set(argv):
         print(__doc__); return 0
@@ -351,6 +374,7 @@ def main(argv):
         old = cfg.get(k)
         cfg[k] = json.loads(v) if v[:1] in '[{' else v
         print(f'  {k}: {old!r} -> {cfg[k]!r}')
+    mark_edited(cfg, [k for k in kv if k not in FRAMED_KEYS])
 
     data[CFG] = json.dumps(cfg, indent=4, ensure_ascii=True,
                            sort_keys=True).encode('utf-8')
@@ -359,16 +383,6 @@ def main(argv):
             zo.writestr(it, data[it.filename])
     print('записано', dst)
 
-    # The GUI applies only the keys listed in different_settings_to_system on top of
-    # the system preset. Inventing that list breaks opening the file, so it is never
-    # written here - only reported.
-    dss = cfg.get('different_settings_to_system') or ['']
-    listed = set(str(dss[0]).split(';'))
-    unseen = sorted(k for k in kv if k not in listed)
-    if unseen:
-        print('интерфейс этих правок не увидит — их нет в different_settings_to_system: '
-              + ', '.join(unseen))
-        print('  CLI и slice.sh режут с ними; в интерфейсе выставить руками')
     return 0
 
 

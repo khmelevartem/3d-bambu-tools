@@ -291,8 +291,10 @@ def _():
     out = run([TOOLS / "patch3mf.py", project(), d / "o.3mf",
                "layer_height=0.12", "enable_support=1"])
     contains(out, "layer_height: '0.2' -> '0.12'", "enable_support: '0' -> '1'",
-             "записано", "интерфейс этих правок не увидит",
-             "enable_support, layer_height")
+             "записано")
+    with zipfile.ZipFile(d / "o.3mf") as z:
+        dss = json.loads(z.read("Metadata/project_settings.config"))["different_settings_to_system"]
+    assert {"enable_support", "layer_height"} <= set(dss[0].split(";")), dss
     # правка проверяется чужими глазами — чтением через figopt
     contains(run([TOOLS / "figopt.py", "audit", d / "o.3mf"]), "слой 0.12")
 
@@ -442,13 +444,15 @@ def _():
     out = run([TOOLS / "retune_project.py", human, "-o", d / "o.3mf", "--from", ref])
     contains(out,
              "перенесено значений: 2",
-             "список правок оставлен авторский: layer_height",
+             "список правок процесса: enable_support;layer_height;sparse_infill_density",
              "их значения не тронуты: layer_height=0.12",
              "перенесены без потерь: да")
     assert "layer_height" not in out.split("перенесено значений")[1].split("\n\n")[0], \
         "авторский слой перенесён, хотя человек правил его руками"
     cfg = json.loads(zipfile.ZipFile(d / "o.3mf").read(CFG))
     assert cfg["layer_height"] == "0.12", "слой человека затёрт эталонным"
+    assert cfg["different_settings_to_system"][0] == \
+        "enable_support;layer_height;sparse_infill_density", cfg["different_settings_to_system"]
     assert cfg["enable_support"] == "1", "настройка из эталона не доехала"
 
 

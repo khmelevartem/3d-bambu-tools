@@ -17,22 +17,16 @@ Studio saved with the right nozzle and process.
 
 What is NOT touched, and this is the important part:
 
-* `different_settings_to_system` — the list of edits relative to the system
-  preset. **It must not be invented.** A hand-written list, even a plausible
-  one, makes the GUI refuse to open the file; the same file with the author's
-  list left intact opens.
-* **the keys in that list themselves** — they are what the human changed by
+* **the keys already in `different_settings_to_system`** — they are what the human changed by
   hand: supports switched on, the layer chosen, the prime tower switched off.
   The reference carries its own decisions for the same keys, and without this
   caveat the port silently wipes their work.
 * `filament_colour` — the colours they picked for their own spools.
 * print hosts (`host_type`, `printhost_*`) — those are about their account.
 
-A consequence worth saying out loud. The GUI takes the system preset and
-applies only the keys from `different_settings_to_system`. So edits that are
-not in that list do reach a CLI slice, but the human will not see them in
-the GUI — those they set by hand (and better, save as their own preset).
-Numbers from `slice.sh` and `figopt.py` on such a file describe the CLI slice.
+The GUI takes the system preset and overlays only the keys listed in
+`different_settings_to_system`, so every ported key is added to that list,
+exactly as the GUI itself records an edit on save.
 """
 import argparse
 import collections
@@ -41,9 +35,11 @@ import re
 import sys
 import zipfile
 
+from patch3mf import mark_edited
+
 # Not ported: either the human's choice, or structure the GUI writes itself.
 KEEP = {
-    "different_settings_to_system",     # see the docstring — never invent it
+    "different_settings_to_system",     # extended below, never overwritten
     "filament_colour",                  # their spools
     "host_type", "printhost_authorization_type", "printhost_ssl_ignore_revoke",
     "filament_colour_type", "filament_multi_colour", "extruder_nozzle_stats_new",
@@ -96,6 +92,7 @@ def main():
         if mine[key] != val:
             changed.append((key, mine[key], val))
             mine[key] = val
+    mark_edited(mine, [k for k, _, _ in changed])
 
     body = json.dumps(mine, indent=4, ensure_ascii=False).encode("utf-8")
     zout = zipfile.ZipFile(a.out, "w", zipfile.ZIP_DEFLATED)
@@ -118,9 +115,7 @@ def main():
                        "support_top_z_distance", "filament_settings_id", "enable_support"):
                 print(f"  {key:30} {str(old)[:38]:38} -> {str(new)[:38]}")
         own = mine.get("different_settings_to_system") or [""]
-        print(f"\nсписок правок оставлен авторский: {own[0] or '(пуст)'}")
-        print("  интерфейс применит системный пресет плюс ЭТИ ключи; остальное "
-              "человек ставит руками")
+        print(f"\nсписок правок процесса: {own[0] or '(пуст)'}")
         if hands:
             print("  их значения не тронуты: "
                   + ", ".join(f"{k}={mine[k]}" for k in sorted(hands) if k in mine))

@@ -117,11 +117,8 @@ Quality rises for almost nothing:
 | `support_top_z_distance` = 2 layers | at one layer PLA welds to PLA and tears off with the surface |
 | `wall_generator = arachne` | fewer bridges on organic shapes at the same time |
 
-**A scarf seam stays off while `override_filament_scarf_seam_setting = 0`**:
-the filament profile's `filament_scarf_seam_type` wins over the process
-setting. Verify in the G-code, never in the setting — with a scarf, outer
-perimeter extrusions carry a Z change inside the layer. The check and the
-second trap are in
+Verify a scarf seam in the G-code: outer perimeter extrusions carry a Z change
+inside the layer. The check and the value trap are in
 [surface-supports-seam.md](references/surface-supports-seam.md).
 
 **Supports go only where they are needed.** `support_on_build_plate_only`
@@ -174,12 +171,9 @@ filament is decided by key name, never by length: a 4-corner `printable_area`
 cut down in a 4-filament project leaves the CLI with nothing to slice.
 
 **An edit reaches the GUI only together with `different_settings_to_system`.**
-That key lists what differs from the system preset. Absent, it means the author
-changed nothing; once you edit, it must appear, or the GUI takes the system
-preset and never sees the edit while the CLI reports success. The list itself
-is never written by hand — the GUI refuses a file with an invented one — so
-`patch3mf.py` names the edits the GUI will not see, and those are set in the
-GUI.
+That key lists what differs from the system preset; the GUI overlays only the
+keys in it. `patch3mf.py` adds every key it changes to the list, so the edit is
+in the file when the person opens it — nothing is left to set by hand.
 
 For a different layer height, lay down a real process profile of that height
 (`resolve_profile.py`) and put your differences on top, rather than overwriting
