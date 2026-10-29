@@ -1,6 +1,6 @@
 ---
 name: 3mf-paint
-description: Edit per-filament paint inside a finished 3MF, and split a model by colour into separate parts for gluing. Straighten ragged colour borders, clean speckle, repaint zones, add a filament to a project; cut into parts with proper joints — a flat cut, a blind socket in both halves and a separately printed pin. Use when the user complains about uneven or jagged colour borders on a downloaded model, asks to paint a specific place with another filament, to remove paint artefacts left by a generator or by their own brush work, to check the paint before printing, and also when they want to print every colour as a separate part instead of filament changes and ask about the seam, the joint, gluing, pins and sockets. Triggers — paint, paint_color, colour borders, colour transitions, speckle, Color Painting, split triangles, AMS colours in a .3mf, split by colour, one part per colour, seam, joint, glue, pin, socket, paint_split; покраска, paint_color, границы цвета, цветные переходы, крап по всей модели после генерации, дроблёные треугольники, AMS-цвета в .3mf, разрезать по цветам, нарезка по цветам, отдельной деталью на цвет, шов, стык, склеить, штифт, ниша, закрасить другим филаментом, зубчатые границы, «проверь покраску перед печатью», «добавь пятый филамент в проект», добавить филамент, перекрасить зону, артефакты после ручной кисти, убрать крап.
+description: Edit per-filament paint inside a finished 3MF, and split a model by colour into separate parts for gluing. Straighten ragged colour borders, clean speckle, repaint zones, add a filament to a project; cut into parts with proper joints — a flat cut, a blind socket in both halves and a separately printed pin. Use when the user complains about uneven or jagged colour borders on a downloaded model, asks to paint a specific place with another filament, to remove paint artefacts left by a generator or by their own brush work, to check the paint before printing, and also when they want to print every colour as a separate part instead of filament changes and ask about the seam, the joint, gluing, pins and sockets. Triggers — paint, paint_color, colour borders, colour transitions, speckle, Color Painting, split triangles, AMS colours in a .3mf, split by colour, one part per colour, seam, joint, glue, pin, socket, paint_split, eye as a separate part, eye socket, insert clearance, socket in an open mesh; покраска, paint_color, границы цвета, цветные переходы, крап по всей модели после генерации, дроблёные треугольники, AMS-цвета в .3mf, разрезать по цветам, нарезка по цветам, отдельной деталью на цвет, шов, стык, склеить, штифт, ниша, закрасить другим филаментом, зубчатые границы, «проверь покраску перед печатью», «добавь пятый филамент в проект», добавить филамент, перекрасить зону, артефакты после ручной кисти, убрать крап, «сделай глаз», «глаз отдельной деталью», «вкладыш болтается в нише».
 ---
 
 # Paint inside a finished 3MF
@@ -213,6 +213,22 @@ $RC check work/gauge_rest.stl work/hair_part.stl@0,0.5,0.87 work/must_part.stl@0
 
 `--plane-cut auto` moves a jointed seam from the colour contour onto a plane;
 **it must be identical for `joints` and `cut`, because it changes the mesh.**
+
+An eye printed as its own part is built by `eyeplug.py` (`fit`, `build`,
+`donor`, `socket`), never cut out of the mesh. A socket in a generated body
+that is not closed is cut by `opensocket.py cut`, without a boolean and without
+losing paint. Before any glued insert, plug or pin goes to print, `fitgap.py
+measure` reads its clearance per wall zone and `apply` sets it. Usage sits next
+to each rule in the reference.
+
+When the user draws the cut themselves, they paint it in Bambu Studio with a
+spare "marker" filament: a narrow closed band along the seam, or a fill over
+the whole part. `markercut.py seam --marker N` returns the band's mid-line, or
+the fill's border, as per-face zones; feed them to `relief_cut.py --labels`,
+`paint_split.py` or `solid_cut.py inlay`. An open band is refused with the
+gap's coordinates. Then `markercut.py clean` repaints the marker from its
+neighbours and drops the filament; the filaments above it renumber, so check
+the AMS slots.
 
 **Say before starting whether the model is suitable at all.** A socket lives
 inside the body of a part, and a colour smeared as a patch over the surface has

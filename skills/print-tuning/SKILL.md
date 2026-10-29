@@ -1,6 +1,6 @@
 ---
 name: print-tuning
-description: Cut the plastic and the print time of one specific file without losing visible quality — check the project settings, redundant perimeters and infill, ironing, supports, the prime tower, placement and tilt on the bed, the layer height, and on a multicolour model count the filament changes and the price of flushing. Use when the user says "optimise this figurine", "check this file before printing", "why does it take so long", "how many colour changes are in here", "do I need a prime tower", "which layer height should I take", "how should it sit on the bed", "can it be tilted", "reduce the plastic", "cut the print time", "how do I print this cheaper without losing quality", or brings a downloaded .3mf and asks what to change in it. Triggers — optimise print, project settings, prime tower, filament changes, flush, plastic usage, print time, bed orientation, part tilt, layer height, stair stepping, seam, supports on a figurine; «оптимизируй эту фигурку», «проверь файл перед печатью», «почему так долго печатается», «сколько здесь смен цвета», «сколько уйдёт на промывку», «нужна ли башня очистки», «какой слой взять», «как положить на стол», «можно ли наклонить», «уменьши расход», «сократи время печати», «напечатать дешевле без потери качества», «проверь настройки проекта»; оптимизировать печать, настройки проекта, башня очистки, смены филамента, промывка, расход пластика, время печати, ориентация на столе, наклон детали, высота слоя, слоистость, ступеньки, шов, поддержки фигурки.
+description: Cut the plastic and the print time of one specific file without losing visible quality — check the project settings, redundant perimeters and infill, ironing, supports, the prime tower, placement and tilt on the bed, the layer height, and on a multicolour model count the filament changes and the price of flushing. Use when the user says "optimise this figurine", "check this file before printing", "why does it take so long", "how many colour changes are in here", "do I need a prime tower", "which layer height should I take", "how should it sit on the bed", "can it be tilted", or brings a downloaded .3mf and asks what to change in it. Triggers — optimise print, project settings, prime tower, filament changes, flush, plastic usage, print time, bed orientation, part tilt, layer height, stair stepping, seam, supports on a figurine, where supports landed, parts out of sync with the project; «оптимизируй эту фигурку», «проверь файл перед печатью», «почему так долго печатается», «сколько здесь смен цвета», «сколько уйдёт на промывку», «нужна ли башня очистки», «какой слой взять», «как положить на стол», «можно ли наклонить», «уменьши расход», «сократи время печати», «напечатать дешевле без потери качества», «проверь настройки проекта»; оптимизировать печать, настройки проекта, башня очистки, смены филамента, промывка, расход пластика, время печати, ориентация на столе, наклон детали, высота слоя, слоистость, ступеньки, шов, поддержки фигурки, «куда легли поддержки», «parts разошлись с проектом».
 ---
 
 # Optimising a file before printing
@@ -123,7 +123,10 @@ inside the layer. The check and the value trap are in
 
 **Supports go only where they are needed.** `support_on_build_plate_only`
 leaves overhangs that rest on the model itself unsupported; check by ray cast
-with `figcheck.py`.
+with `figcheck.py`. Where they actually landed after the slice, and how much
+of that sits on visible faces, is `supportmap.py` — choosing a part's pose by
+its support scars is in
+[surface-supports-seam.md](references/surface-supports-seam.md).
 
 ## Flush volumes per colour pair
 
@@ -191,7 +194,9 @@ A tilt is a technique about overhangs and about where the staircase lands, and
 it is decided by the stair-step distribution from `figcheck.py`, not by the
 footprint and not by colour changes. It removes a coarse staircase from
 horizontal places and in exchange smears a fine step over the whole figure,
-face included — on a display piece that is usually a loss.
+face included. Whether that is a loss is decided by the step width: below the
+line width the step does not show, and what the face pays instead is sheen — a
+slanted face prints matte, a vertical one glossy.
 
 **A collapsed footprint after a tilt is not an argument against it**: the
 bottom is re-cut in the new pose and the footprint comes back, often larger and
@@ -232,6 +237,37 @@ If a part has a socket or a pocket for an insert, the infill pattern stops
 being free: spiral and concentric patterns run along the wall and do not hold
 it across. Use a lattice — Cubic, Grid or Gyroid. Orientation and clearances
 for such parts are in **3mf-paint**, `references/split-to-parts.md`.
+
+## A project assembled from a folder of parts
+
+A multi-part figure lives in two places: the shape of every part is an STL in
+a parts folder, and the project holds a copy of each mesh with what was done to
+it by hand — its pose on the plate, its assembly pose, its own layer height,
+supports and filament. **The pose and the settings belong to the project, the
+shape belongs to the folder, and neither overwrites the other.** Rebuilding the
+project from the folder loses every hand-set pose; editing the folder leaves the
+project printing the old part. `partsproject.py` keeps the two in step:
+
+```bash
+PP="uv run --with numpy --with scipy python tools/partsproject.py"
+$PP diff   project.3mf parts_dir/
+$PP sync   project.3mf parts_dir/ -o synced.3mf
+$PP set    project.3mf --object Arm layer_height=0.12 enable_support=1 -o tuned.3mf
+$PP export project.3mf -o pack/
+```
+
+Run `diff` first whenever the folder may have changed: it pairs objects with
+files by name, then by shape up to a rigid motion, and lists what differs and
+what has no pair. `sync` puts the folder's mesh into every object whose shape
+differs, fitted rigidly onto the old mesh so the visible pose does not move;
+build item, assembly pose and object settings stay. Paint survives only when
+the face count matches and the faces lie where they were; otherwise it is
+dropped with a warning. `--add` brings in files missing from the project.
+Objects of several parts are skipped. `set` writes per-object settings and
+refuses a key the project's process does not know — the slicer would ignore it
+silently. `export` writes one STL per object in its print pose, named
+`<filament>_<object>`, identical parts as one file with `_xN`. Every command
+writes only to `-o`.
 
 ## Checks before handing over
 

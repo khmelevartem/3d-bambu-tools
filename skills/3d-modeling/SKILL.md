@@ -1,6 +1,6 @@
 ---
 name: 3d-modeling
-description: Create and rework 3D models in code for a Bambu Lab printer — OpenSCAD with BOSL2, build123d, printability checks, slicing through the Bambu Studio CLI, assembling and editing .3mf projects. Use when the user asks to make, rework, measure or print a part, to compute its weight in grams and its print time, to deal with overhangs, supports, clearances and fits, to fix a model downloaded from MakerWorld, to set a surface texture, and when the nozzle or the spool has changed and the print has to be recomputed. Triggers — .scad, .stl, .3mf, OpenSCAD, BOSL2, build123d, slicer, slicing, G-code, supports, fuzzy skin, nozzle, hardware.json; «сделай подставку под телефон», сделай деталь с нуля, напечатай деталь, переделай модель, обмерь, нарежь, «сколько граммов и сколько будет печататься эта деталь», посчитай вес в граммах и время печати, «этот свес не провиснет», свесы и нависания, поддержки, зазоры и посадки, поправь модель с MakerWorld, фактура поверхности, нечёткая оболочка, сменил сопло, сменил катушку, OpenSCAD, BOSL2, build123d, нарезка, G-код.
+description: Create and rework 3D models in code for a Bambu Lab printer — OpenSCAD with BOSL2, build123d, printability checks, slicing through the Bambu Studio CLI, assembling and editing .3mf projects. Use when the user asks to make, rework, measure or print a part, to compute its weight in grams and its print time, to deal with overhangs, supports, clearances and fits, to fix a model downloaded from MakerWorld, to set a surface texture, and when the nozzle or the spool has changed and the print has to be recomputed. Triggers — .scad, .stl, .3mf, OpenSCAD, BOSL2, build123d, slicer, slicing, G-code, supports, fuzzy skin, nozzle, hardware.json, is the base flat, the fit rattles; «сделай подставку под телефон», сделай деталь с нуля, напечатай деталь, переделай модель, обмерь, нарежь, «сколько граммов и сколько будет печататься эта деталь», посчитай вес в граммах и время печати, «этот свес не провиснет», свесы и нависания, поддержки, зазоры и посадки, поправь модель с MakerWorld, фактура поверхности, нечёткая оболочка, сменил сопло, сменил катушку, OpenSCAD, BOSL2, build123d, нарезка, G-код, «проверь, плоское ли дно», «подошва стоит не плоско», «зазор болтается».
 ---
 
 # Modelling in code
@@ -36,6 +36,8 @@ references. A finished result may be put next to the model, but say so.
 | print each colour as a separate part and glue | skill **3mf-paint**, [splitting into parts](../3mf-paint/references/split-to-parts.md) |
 | a GLB from a generator, with a texture | the colour is an image, not filaments: **3mf-paint** for the texture, **mesh-repair** for the mesh |
 | the assembled project will not open in the GUI | [CLI traps](references/bambu-cli.md) |
+| the parts folder and the multi-part project have drifted apart | `partsproject.py diff`, skill **print-tuning** |
+| does the sole or base stand flat on the plate | `flatbase.py check`, [figurines](references/figurines.md) |
 | the slicer complains about the mesh | skill **mesh-repair** |
 | the nozzle, spool or plate changed | edit `hardware.json`, and nothing else |
 
@@ -68,6 +70,9 @@ Project scripts live in `tools/`, with dependencies pulled in through
 | `writeverts.py` | move vertices inside a 3MF without touching face numbering — **shape edits without losing paint** |
 | `partedit.py` | add a `normal_part` / `negative_part` to an object, changing a foreign model's shape without touching its mesh or paint |
 | `graft.py` | grow a missing piece onto a foreign mesh, appending faces at the end so the paint stays |
+| `flatbase.py` | is the face a part stands on a plane, in the print pose; `flatten` presses it flat without losing paint — [figurines](references/figurines.md) |
+| `fitgap.py` | clearance of an insert, plug or pin in its socket per wall zone, by the print pose of each part; `apply` sets it — [clearances](../3mf-paint/references/split-to-parts.md#clearances) |
+| `partsproject.py` | a multi-part project against its folder of STL parts: `diff`, `sync` without losing poses, per-object `set`, `export` of a print-pose STL pack — skill **print-tuning** |
 
 ## The working cycle
 

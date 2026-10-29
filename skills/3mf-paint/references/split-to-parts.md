@@ -24,7 +24,7 @@ each half; the pin is a separate body, or grafted onto one half.
 
 | Tolerance | Value | Why |
 |---|---|---|
-| pin cross-section below socket | **0.20 mm** (0.10 per side) | enters without rattling |
+| pin cross-section below socket, per side | **by how the walls meet the layers** — see [Clearances](#clearances) | one number for every pin either rattles or jams |
 | pin shorter than the two depths together | **up to ~1.4 mm** | otherwise the pin bottoms out before the halves meet and leaves a gap on the visible joint |
 
 **Use a rectangular cross-section, never round.** A round pin leaves the parts
@@ -610,6 +610,32 @@ tunnel that another part's tongue goes into. Work in the part's frame: the axis
   seam itself by harmonic interpolation along the rim rather than leave a knife
   edge; name the lift and the arc it covers.
 
+### A socket in a body that is not closed: surgery, not a boolean
+
+A generator mesh carries thousands of open edges. A boolean refuses it, and a
+global repair moves the surface by millimetres and wipes out the small features
+the socket is cut for. **Cut the skin along the outline, take out what lies
+inside, and stitch a wall and a floor into the cut edge** — `opensocket.py
+cut`. It adds no open edges, leaves the rest of the mesh as it was, and keeps
+the indices and the paint of every old face.
+
+```bash
+UV="uv run --quiet --with numpy --with scipy --with shapely --with triangle python"
+$UV tools/opensocket.py cut model.3mf --object Body --paint 4 --depth 1.5 --gap 0.10 --paint-new 4 --out socket.3mf
+$UV tools/opensocket.py cut body.stl --insert plug.stl --axis 0.1,-0.9,0.4 --gap 0.15 --out socket.stl
+```
+
+The outline is the insert's: `--circle x,y,z --radius r`, a painted patch
+(`--paint N`, `--near x,y,z` picks one of several, `--smooth k` rounds its
+border), or the silhouette of the insert along the axis (`--insert part.stl`).
+`--axis` is the pull-out direction, pointing out of the body. `--depth` counts
+from the lowest point of the rim, `--floor-normal` tilts the floor, `--gap` and
+`--gap-depth` are the side and floor clearances — 0.05 by default, the side
+value taken from [Clearances](#clearances). `--paint-new N` paints the new
+faces. The mesh must be finer than the curvature of the outline; coordinates
+are the object's local ones; brush subdivision on the faces the cut crosses is
+lost; a composite object is cut in its first part only.
+
 ## When the colour comes from overlapping bodies
 
 A model may be coloured not with the brush but as several overlapping bodies,
@@ -737,8 +763,9 @@ area for candidate planes before cutting.
 - **A thin relief — a moustache — still needs prism walls.** With nothing
   between the bounds, the sheet alone is rough. Bound it with an exact prism
   over the smoothed footprint, widened by a quarter of a millimetre so the
-  relief's own side walls stay on the part, and give the pocket prism 0.2 mm
-  per side. A raster clip leaves the grid staircase in the wall.
+  relief's own side walls stay on the part, and give the pocket prism the side
+  clearance from [Clearances](#clearances). A raster clip leaves the grid
+  staircase in the wall.
 - **When a flat back is required, tilt the axis, not the floor.** A relief
   draped over a lip with a pocket right behind it has no flat floor along its
   own normal. Turn the extraction axis towards the neighbouring pocket's axis:
@@ -885,7 +912,7 @@ and walls of a plug several millimetres across, comes off its supports rough,
 and a knife and a pass of sandpaper bring it back in a minute; the seam hides
 what is left. A clean seat is never worth a smaller first layer: stand the part
 on its cut side — on the plug's end — and let the support take the seat. This
-does not extend to an inlay's side walls or a small pin — a fit of 0.05–0.2 mm
+does not extend to an inlay's side walls or a small pin — a fit of 0.05–0.15 mm
 has nothing to trim, and a scar there becomes play or a jam.
 
 **The cut side is the footing, not the end of a limb.** A part about 20 mm
@@ -916,7 +943,33 @@ With the axis vertical every layer of the dome is a concentric circle and the
 finished eyeball is visibly ringed. On edge the layers cut the dome in parallel
 planes and nothing reads as a ring. The price is paid on the cylinder: the
 first layers run along its own generatrix and spread, so such a plug needs
-0.15 mm per side. At zero it has to be sanded before it will go in.
+0.15 mm per side. Below 0.05 it goes in only as a press and has to be sanded.
+
+**An eye is built from numbers, never cut from the generator's mesh**: its rim
+sits in a ragged fold, the socket carries reversed faces, the pupil is not an
+oval. `eyeplug.py` measures the socket and builds a clean plug under a dome,
+already in this pose:
+
+```bash
+UV="uv run --quiet --with numpy --with scipy --with trimesh --with manifold3d python"
+$UV tools/eyeplug.py fit    head.3mf --object Head --at=16,12.2,-1.7 -o fit.json
+$UV tools/eyeplug.py build  --fit fit.json --pupil 1.6,2.1 --glint white -o out/
+$UV tools/eyeplug.py donor  good_eye.stl --fit fit.json -o out/
+$UV tools/eyeplug.py socket --fit fit.json -o out/
+```
+
+`fit --at x,y,z` takes a point near the socket and measures it as a prism: the
+axis, the wall radius, the floor plane with its spread, the mouth as a height
+profile. Where the eye is only painted on, `fit --code N` takes every patch of
+filament N as one eye, and `socket --fit` then gives the cutter for a missing
+or crooked socket. `build --rim follow` lets the dome edge follow the mouth so
+no lip stands proud of the face; `--iris a,b` and `--pupil a,b` are nested
+elliptical inserts with pockets in the part outside them; `--glint` is `hole`,
+`white` or `pin`. Clearances come out of the print poses — the eye on its edge
+0.15 in the socket, inserts flat with walls along Z — and `--gap`,
+`--insert-gap` override them. An eye that already printed well is reused with
+`donor EYE.stl --fit`, scaled uniformly so the dome keeps its shape. Only prism
+sockets are measured, not a spherical bowl, and a donor must be round.
 
 **A ball on a stalk is never printed ball-down**, and standing it up works only
 if the support reaches the full height. Support that stops at mid-height leaves
@@ -948,19 +1001,63 @@ orientation. Naming the orientation in words is not enough.
 **A pin only prints round when its axis stands up.** Lay the part so the pin
 axis is within about 30 degrees of vertical and let the support area and the
 overhangs be optimised inside that constraint, not against it. A pin printed
-lying down sags on its underside, and the 0.1 mm per side of a sliding fit does
-not survive that; a small part standing on 4 mm of contact does survive, with a
+lying down sags on its underside, and the 0.05–0.10 mm per side of a sliding
+fit does not survive that; a small part standing on 4 mm of contact does survive, with a
 brim. Sweep orientations with the axis as a hard filter and report both numbers
 — contact area and overhang area — for the pose you hand over.
 
 ### Clearances
 
-| Clearance | Value | Why |
+**The side clearance is chosen by how the walls of the pocket and of the insert
+lie against the print layers — in the print pose of each of the two parts.** A
+wall that stands vertical prints where the model puts it, so the gap can be
+almost nothing. A wall at an angle to the layers is a staircase, a dome is a
+stack of rings, and a plug on edge spreads its first layers along the
+generatrix: the steps eat the gap, and it has to be larger. One number for
+every sideways inlay does not work — the same 0.20 that suits a stepped wall
+lets a brow or a moustache in a vertical-walled pocket rattle.
+
+| Case | Per side | Why |
 |---|---|---|
-| sideways, per side | **0.20 mm** | 0.30 shows as a visible gap |
+| walls of both pocket and insert vertical in both print poses, layer ≤ 0.12 mm | **0.05 mm** | vertical walls print true; at 0.20 such an inlay rattles |
+| in between — walls vertical but layer above 0.12, or walls steep but not vertical | **0.10 mm** | the walls step, but finely |
+| a wall tilted to the layers, a dome, a plug printed on edge, a pocket at an angle to Z | **0.15 mm** | the layer steps and the spread first layers take up the rest |
+| a joint that turns or moves | **0.10 mm** | holds the pose and still turns; see [A joint that turns](#a-joint-that-turns) |
 | depth | **0.05 mm** | it is entirely how far the inlay sinks below the surface |
-| sideways if the inlay must print as a staircase | 0.30 mm | the staircase eats the difference |
-| sideways for a round plug printed on edge | **0.15 mm** | the first layers spread along the cylinder's generatrix |
+
+**Below 0.05 per side is a press fit** — it goes in only by force and gets
+sanded. **Above 0.20 the gap shows** as a dark line along the visible contour;
+0.30 always does.
+
+Read the case off the actual print poses, not off the design: an inlay laid by
+its extraction axis has vertical walls, while the same pocket in a body printed
+crown down may meet the layers at an angle. When the two walls fall into
+different rows — the pocket vertical, the insert tilted — take the larger value.
+
+**Measure the clearance before printing any glued insert, plug or pin, and set
+it zone by zone** — `fitgap.py`. Both parts go in as STL in the assembly pose,
+the insert seated in the socket; the print pose of each is given as its up
+direction in that STL's coordinates (`--up-insert X,Y,Z`, `--up-socket X,Y,Z`,
++Z without them) or read from the project (`--print-insert proj.3mf:Obj`,
+`--print-socket proj.3mf:Obj`).
+
+```bash
+UV="uv run --quiet --with numpy --with scipy --with trimesh --with rtree python"
+$UV tools/fitgap.py measure peg.stl body.stl --print-insert proj.3mf:Peg --print-socket proj.3mf:Body
+$UV tools/fitgap.py apply   peg.stl body.stl --move insert --put proj.3mf:Peg --out proj_fit.3mf
+```
+
+`measure` classes every contact wall by its angle to the layers in its part's
+print pose into the rows of the table above, and gives the gap and any
+interference per zone, plus the travel left under the bottom. The pair's
+clearance is the target of its most demanding zone that holds at least a tenth
+of the wall area. `apply` moves the walls of one part only, each zone to its
+own target, and the bottom to `--bottom` (`--keep-bottom` leaves it): no face
+is added or renumbered, so the paint survives; `--out x.stl` writes the moved
+mesh, `--put proj.3mf:Obj` writes it back into the project. A negative vector
+goes through `=`: `--up-insert=-1,0,0`. The STL must be in the assembly pose —
+a mesh pulled out of a 3MF is centred on its own origin — and only an object
+of a single part is taken.
 
 **The depth clearance is not the side clearance.** The inlay is stopped by the
 pocket floor, so however much deeper the floor is, that is how far the part
@@ -1045,6 +1142,9 @@ centres and depths and take the one with a real wall.
 | a joint across an axis: one cut, a blind socket in each half, a pin | `pivot_joint.py` |
 | relief on an organic body: a smooth-sheet cut, a draped relief, a ring | `relief_cut.py` |
 | the price of cutting by colour, which seams survive, the socket plan | `paint_split.py` |
+| an eye as its own part: plug and dome fitted to the socket, iris, pupil, glint | `eyeplug.py` |
+| a socket in a mesh that is not closed, where a boolean fails | `opensocket.py` |
+| the clearance of a cut pair, measured and set per wall zone | `fitgap.py` |
 | a whole limb cut off with a pin, planned by hand in the Blender viewport | **EasySlice Print**, an addon |
 
 EasySlice Print is an equal member of this list, not a fallback: it plans the

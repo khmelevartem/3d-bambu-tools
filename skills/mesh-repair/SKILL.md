@@ -315,6 +315,12 @@ solver does on the same union (7035 against 42 on a 1.6-million-face figure).
 So: repair the inputs, use the manifold solver, and keep the exact one as the
 fallback for inputs that cannot be made manifold.
 
+**A socket into a torn body does not need the body repaired first.**
+`opensocket.py cut` sinks it by surgery on the surface — cut along the outline,
+stitch a wall and a floor into the cut edge — with no boolean, no new open
+edges and the paint of old faces kept; the body's own open edges stay as they
+were. Usage is in the **3mf-paint** skill, `references/split-to-parts.md`.
+
 **A boolean between a part and the body it was cut from is not a check.** They
 share whole coplanar surfaces, and the exact solver returns nonsense there —
 intersections came back as negative volumes on parts that were provably fine.

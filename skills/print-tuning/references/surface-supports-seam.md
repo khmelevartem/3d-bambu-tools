@@ -30,6 +30,14 @@ threshold = atan( layer height / (line width / 2) )
 slowdown over overhangs and on part cooling. **For a display piece take the
 computed value.**
 
+A face right at the computed threshold prints without support, rough but even:
+acceptable on a joint face, not on a visible one.
+
+**A part standing on an edge bulges along that edge.** The first layers and the
+brim stand proud of the faces meeting at the edge. If one of them is a mating
+face, the bulge has to be filed flat before assembly; keep mating faces off the
+bed edge when the pose allows.
+
 **Raising the threshold above the computed one is paid for on the visible
 side.** Every degree of margin turns another band of wall into supported
 overhang, and the support leaves its marks there whether the wall needed it or
@@ -57,6 +65,35 @@ merges branches differently and thins the neck again — measure, do not
 extrapolate. Tilting the part leaves the neck where it was, and normal support
 in its place stands on thin pillars, so neither replaces thicker branches.
 
+### Choose the pose by the scars the slice really leaves
+
+`figcheck.py` predicts supports from the mesh; `gcode_report.py` says whether
+there are any. Neither says which faces carry a scar after this slice and
+whether those faces show. `supportmap.py` reads what the slicer laid down,
+finds where every support column ends against the model and adds the contact
+up face by face:
+
+```bash
+SM="uv run --with numpy --with scipy --with trimesh --with embreex python tools/supportmap.py"
+$SM map   part.3mf --supports --joints auto --hide-fil 3
+$SM sweep part.3mf --object Arm --poses "0,0;30,0;-30,0;0,45" --supports --max 6
+$SM neck  plate_1.gcode
+```
+
+`map PROJECT.3mf [GCODE]` slices the project itself with its own settings
+when no G-code is given (`--supports` switches supports on in a copy) and keeps
+the pose exactly as it is in the project. It reports mm² of contact per object,
+split into visible and hidden, and the largest visible spots with coordinates.
+Hidden is what the assembly covers: a whole object (`--hide-object`), a face
+mask (`--hide-mask NAME=faces.npy`), joint faces painted in their own filament
+(`--hide-fil`), flat cut faces (`--joints auto`) and the inside of sockets
+(`--niche`). `sweep` slices the same part in each listed tilt, ranks the poses
+by visible contact, then time, then grams; every pose is a full slice, so keep
+the list short and take the top row. `neck GCODE` lists the thinnest trunk
+sections that still carry support above them, with diameter, height and
+position — the place to thicken branches. Contact on side walls is not
+counted, and `sweep` does not tell apart two objects with the same name.
+
 ## Layer height
 
 The width of a step on the surface is `layer height / tan(angle to
@@ -66,6 +103,15 @@ horizontal)`: zero on a vertical wall, infinite on the crown of a dome.
 Decide from the distribution of step width over area, not from an average; the
 columns come from `figcheck.py`. Show **where** the bad areas sit — a histogram
 of their area against z names the place rather than the model as a whole.
+
+**A step narrower than the line width does not show on a face.** Count the area
+with steps wider than the line width; the band between half a line and a full
+line is not a defect and does not decide the pose.
+
+**The pose sets the sheen as well as the steps.** A face standing as a
+near-vertical wall prints glossy; a face slanted to the layers prints matte even
+where no step shows. When two poses are both free of steps and scars, the finish
+the piece wants decides, and faces seen side by side on one figure should share it.
 
 A second sign in favour of a finer layer is the weight of the `Floating
 vertical shell` line type in `gcode_report.py`.

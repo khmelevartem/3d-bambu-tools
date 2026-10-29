@@ -5,7 +5,9 @@ This covers **geometry preparation** only: what the part will stand on and what
 size it should be. Print settings live in the **print-tuning** skill.
 
 **The structural rules do not apply here.** Minimum wall thickness and fit
-clearances are about mechanisms, not about a display piece.
+clearances are about mechanisms, not about a display piece. A figurine split
+into glued parts takes its clearances from the 3mf-paint skill
+(`references/split-to-parts.md`).
 
 ```bash
 uv run tools/figcheck.py model.stl
@@ -48,6 +50,36 @@ the contact patches**, and name the margin in millimetres.
 **A brim is almost always needed.** Even a large first-layer area is usually
 several separate islands that only connect higher up. Use `brim_type =
 outer_only`.
+
+### A plane on a generated mesh is a wave until measured
+
+Where a part should stand on a plane — a sole, a base, a cut — a generator's
+mesh only looks flat. **Measure the contact face as its deviation from a plane
+over the footprint the first layer should cover**: the whole outline of the
+sole or base, not just the points that happen to touch. Fit the plane to the
+surface inside that outline and take the largest distance from it. **More than
+half a layer height — flatten it before slicing**: move those vertices onto the
+plane, or cut with a box as above. Left in, the hollows of the wave fill with
+first-layer debris and the part rocks.
+
+`flatbase.py` does both, in the print pose — a 3MF object through its
+transforms, exactly as it lies on the plate:
+
+```bash
+uv run tools/flatbase.py check   project.3mf --object "Left boot" --object "Right boot"
+uv run tools/flatbase.py flatten project.3mf --object "Left boot" -o fixed.3mf
+```
+
+Run `check` before printing anything that stands on a sole, a base or a cut
+face: the eye does not see a wave of 0.3 mm, the first-layer footprint against
+the patch area does. Each support patch gets its deviation from a plane, its
+tilt and the first-layer footprint, and a verdict against half the layer
+height: not a plane, tilted, or hanging above the bed. On "not a plane" run
+`flatten`: it moves only the Z of the patch and of a rim around it (`--rim`,
+1 mm), keeps the face numbering, and writes a 3MF through `writeverts.py`, so
+the paint survives. `--to bed` (the default) puts every patch on the plate —
+the choice when several patches must all touch it; `--to mean` keeps the
+volume of a single patch. A mesh shared by two objects moves in both.
 
 ## A part with no flat face has no orientation
 

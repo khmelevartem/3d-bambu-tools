@@ -430,8 +430,12 @@ def cmd_inlay(argv):
     fil   = int(opt('--filament', 4, int))
     scale = opt('--scale', 1.0)
     edge  = opt('--edge', 1.2)       # inlay thickness at its thinnest point
-    fit   = opt('--fit', 0.20)   # side clearance per side; 0.20 is verified by
-                                 # printing, 0.30 leaves visible gaps
+    # Side clearance per side. The inlay is printed flat (pocket floor on the bed,
+    # extraction up), so its prism walls are vertical: that is the 0.05 row of the
+    # clearance table, valid for a layer of 0.12 mm or less. 0.20 lets such an
+    # inlay rattle. Pass 0.10 for a coarser layer or steep-but-not-vertical
+    # walls, 0.15 when the body prints with the pocket tilted to Z.
+    fit   = opt('--fit', 0.05)
     dfit  = opt('--depth-fit', 0.05)  # depth clearance: it all goes into how far
                                  # the inlay sinks below the surface
     smooth= opt('--smooth', 0.24)    # radius for cleaning brush teeth off the contour
@@ -585,10 +589,12 @@ def cmd_inlay(argv):
                        f'оставить приливом (проверив, что прилив не смотрит в стол)')
             print(f'      {why}')
         print(f'      -> {name}.stl (вставка), {name}_pocket.stl (резак кармана)')
-    print(f'зазор кармана {fit:.2f} вбок и {dfit:.2f} по глубине. Оба проверены печатью:\n'
-          f'  вбок 0.30 дало видимые щели, 0.20 сидит хорошо; глубинный зазор весь\n'
-          f'  уходит в то, насколько накладка утонет ниже поверхности, поэтому он\n'
-          f'  маленький. Накладка печатается ПЛАШМЯ: дном кармана на стол, выемка вверх.')
+    print(f'зазор кармана {fit:.2f} вбок и {dfit:.2f} по глубине.\n'
+          f'  0.05 вбок — для вертикальных стенок и слоя до 0.12 мм: накладка печатается\n'
+          f'  ПЛАШМЯ, дном кармана на стол, выемка вверх. Слой толще или стенки\n'
+          f'  не отвесные — --fit 0.10; карман в теле наклонён к оси Z печати — 0.15.\n'
+          f'  Глубинный зазор весь уходит в то, насколько накладка утонет ниже\n'
+          f'  поверхности, поэтому он маленький.')
     print('в спецификацию: вставка — INTERSECT с телом, карман — DIFFERENCE')
     return 0
 

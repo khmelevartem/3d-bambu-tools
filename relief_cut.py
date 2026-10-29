@@ -839,7 +839,11 @@ def main():
     p.add_argument('--smooth', type=float, default=0.5)
     p.add_argument('--tol', type=float, default=0.03)
     p.add_argument('--gap', type=float, default=0.1, help='зазор по листу')
-    p.add_argument('--wall', type=float, default=0.2, help='зазор по стенкам')
+    # Side clearance of the pocket walls around the sheet. The walls run along the
+    # removal axis, and the tool knows neither the body's print pose nor the
+    # layer: 0.10 is the middle row of the clearance table. 0.05 when both walls
+    # stand vertical in print at a layer of 0.12 or less, 0.15 when tilted to Z.
+    p.add_argument('--wall', type=float, default=0.1, help='зазор по стенкам')
     p.add_argument('--contour', type=float, default=0.5, help='сглаживание контура стенок, мм')
     p.add_argument('--taubin', type=int, default=60)
     p.add_argument('--plane', type=float, help='площадка тела на плоскости x.n = d')
@@ -851,7 +855,12 @@ def main():
     p.add_argument('--px', type=float, default=0.05)
     p.add_argument('--density', type=float, default=1000)
     p.add_argument('--edge', type=float, default=1.2, help='дно ниже самой глубокой точки рельефа')
-    p.add_argument('--fit', type=float, default=0.2)
+    # Side clearance of the plug. The plug prints on its flat back with vertical
+    # walls, but the pocket sits in the body along an arbitrary removal axis whose
+    # angle to the body's print Z the tool does not know: 0.10, the middle row of
+    # the clearance table. 0.05 when the pocket walls are vertical in print too
+    # at a layer of 0.12 or less, 0.15 when the pocket is tilted to Z.
+    p.add_argument('--fit', type=float, default=0.1)
     p.add_argument('--depth-fit', type=float, default=0.05)
     p.add_argument('--clip', type=float, default=-0.05, help='отступ пробки внутрь силуэта; минус — наружу')
     p.add_argument('--narrow', type=float, default=0.8, help='срезать концы пробки уже 2×N')
