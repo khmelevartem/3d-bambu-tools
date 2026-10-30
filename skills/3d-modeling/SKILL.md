@@ -1,6 +1,6 @@
 ---
 name: 3d-modeling
-description: Create and rework 3D models in code for a Bambu Lab printer — OpenSCAD with BOSL2, build123d, printability checks, slicing through the Bambu Studio CLI, assembling and editing .3mf projects. Use when the user asks to make, rework, measure or print a part, to compute its weight in grams and its print time, to deal with overhangs, supports, clearances and fits, to fix a model downloaded from MakerWorld, to set a surface texture, and when the nozzle or the spool has changed and the print has to be recomputed. Triggers — .scad, .stl, .3mf, OpenSCAD, BOSL2, build123d, slicer, slicing, G-code, supports, fuzzy skin, nozzle, hardware.json, is the base flat, the fit rattles; «сделай подставку под телефон», сделай деталь с нуля, напечатай деталь, переделай модель, обмерь, нарежь, «сколько граммов и сколько будет печататься эта деталь», посчитай вес в граммах и время печати, «этот свес не провиснет», свесы и нависания, поддержки, зазоры и посадки, поправь модель с MakerWorld, фактура поверхности, нечёткая оболочка, сменил сопло, сменил катушку, OpenSCAD, BOSL2, build123d, нарезка, G-код, «проверь, плоское ли дно», «подошва стоит не плоско», «зазор болтается».
+description: Create and rework 3D models in code for a Bambu Lab printer — OpenSCAD with BOSL2, build123d, printability checks, slicing through the Bambu Studio CLI, assembling and editing .3mf projects. Use when the user asks to make, rework, measure or print a part, to compute its weight in grams and its print time, to deal with overhangs, supports, clearances and fits, to fix a model downloaded from MakerWorld, to set a surface texture, to raise lettering and artwork over a flat plate, and when the nozzle or the spool has changed and the print has to be recomputed. Triggers — .scad, .stl, .3mf, OpenSCAD, BOSL2, build123d, slicer, slicing, G-code, supports, fuzzy skin, nozzle, hardware.json, is the base flat, the fit rattles, raised lettering, plaque, sign; «сделай подставку под телефон», сделай деталь с нуля, напечатай деталь, переделай модель, обмерь, нарежь, «сколько граммов и сколько будет печататься эта деталь», посчитай вес в граммах и время печати, «этот свес не провиснет», свесы и нависания, поддержки, зазоры и посадки, поправь модель с MakerWorld, фактура поверхности, нечёткая оболочка, сменил сопло, сменил катушку, OpenSCAD, BOSL2, build123d, нарезка, G-код, «проверь, плоское ли дно», «подошва стоит не плоско», «зазор болтается», «буквы объёмными над подложкой», табличка, сертификат, надпись рельефом, «текст не читается».
 ---
 
 # Modelling in code
@@ -27,6 +27,7 @@ references. A finished result may be put next to the model, but say so.
 | a feature on a foreign model is cut off: a strap, a handle | [graft a piece](references/foreign-3mf.md) |
 | rework a downloaded project | [reworking a foreign 3MF](references/foreign-3mf.md) |
 | a figurine, a statuette, an animal | [figurines](references/figurines.md) |
+| a plate with raised lettering and artwork: a sign, a certificate, a label | [raised lettering](references/relief-text.md) |
 | change the proportions or move a sculpted feature on a finished mesh | [editing a finished mesh](references/sculpt-edits.md) |
 | what to change so it prints faster and cheaper | skill **print-tuning** |
 | does it still look like the reference picture | skill **model-vs-reference** |
@@ -54,6 +55,7 @@ Project scripts live in `tools/`, with dependencies pulled in through
 |---|---|
 | `slice.sh` | weight, time, G-code and a project that opens in the GUI; `--supports` slices with supports |
 | `gcode_report.py` | the slice broken down by line type, and whether supports are present |
+| `gcoderender.py` | what the nozzle lays down in chosen layers, per filament, against the section of the target parts: coverage, overflow, dropped elements |
 | `printcheck.py` | watertightness, genus, bounding box, overhangs. **Gives false holes on imported meshes** — use `meshdoctor.py` for foreign files |
 | `meshdoctor.py` | mesh diagnosis by defect class, with the nozzle taken into account |
 | `meshfix.py` | repair through Blender; extraction and write-back of a mesh inside a 3MF |
@@ -216,7 +218,8 @@ roughly an order of magnitude, making prints several times longer.
 a coarser layer through the 0.2 nozzle.** So a fine layer on 0.4 is the working
 answer to "I want it smoother". Take the 0.2 nozzle only when a line narrower
 than the 0.4 line must fit into the part: fine lettering, a mesh, a
-single-perimeter wall, small mechanisms.
+single-perimeter wall, small mechanisms. On a flat plate the base outweighs
+the lettering, so enlarge the letters first — [raised lettering](references/relief-text.md).
 
 **Name the price before the work, not after**: changing the nozzle also means
 recomputing every slice and editing `hardware.json`.
@@ -277,5 +280,6 @@ are in [references/bambu-cli.md](references/bambu-cli.md).
 - [references/figurines.md](references/figurines.md)
 - [references/foreign-3mf.md](references/foreign-3mf.md)
 - [references/mesh-measuring.md](references/mesh-measuring.md)
+- [references/relief-text.md](references/relief-text.md)
 - [references/sculpt-edits.md](references/sculpt-edits.md)
 - [references/surface.md](references/surface.md)
