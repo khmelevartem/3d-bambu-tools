@@ -28,11 +28,12 @@ Paths inside the skills are written relative to the project root
 
 ## Skills
 
-`skills/` holds five skills. An agent that supports the Claude Code skill
-convention picks them up from `.claude/skills/<name>`, so link or copy them:
+`skills/` holds five skills. Agents that discover project skills in `.agents/skills/` can use
+relative symlinks to these directories:
 
 ```bash
-for s in tools/skills/*/; do ln -s "../../$s" ".claude/skills/$(basename $s)"; done
+mkdir -p .agents/skills
+for s in tools/skills/*/; do ln -s "../../$s" ".agents/skills/$(basename $s)"; done
 ```
 
 | Skill | When it applies |

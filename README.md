@@ -36,8 +36,8 @@ python3 tools/hardware.py                      # prints what it resolved
 For an agent — link the skills and the rules to the project root:
 
 ```bash
-mkdir -p .claude/skills
-for s in tools/skills/*/; do ln -s "../../$s" ".claude/skills/$(basename $s)"; done
+mkdir -p .agents/skills
+for s in tools/skills/*/; do ln -s "../../$s" ".agents/skills/$(basename $s)"; done
 ln -s tools/AGENTS.md AGENTS.md
 ```
 

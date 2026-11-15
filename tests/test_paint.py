@@ -328,6 +328,9 @@ def _():
     cfg["different_settings_to_system"] = ["p", "f1", "f2", "f3", "f4", "m"]
     cfg["flush_volumes_matrix"] = [str(0 if i == j else 140) for i in range(4) for j in range(4)]
     cfg["wipe_tower_x"] = ["10", "20", "30", "40"]
+    # Make the two-entry case independent of the installed slicer's defaults.
+    drying_key = "filament_dev_ams_drying_ams_limitations"
+    cfg[drying_key] = ["0", "1", "1", "0", "1", "1", "0", "0"]
     js = json.dumps(cfg, indent=4, ensure_ascii=True).encode("utf-8")
     src = rewrite(d / "four.3mf", d / "gui.3mf",
                   lambda name, b: js if name.endswith("project_settings.config") else b)
@@ -340,7 +343,7 @@ def _():
         now["different_settings_to_system"]
     assert len(now["flush_volumes_matrix"]) == 25
     assert len(now["nozzle_temperature"]) == 5
-    assert len(now["filament_dev_ams_drying_ams_limitations"]) == 10, \
+    assert now[drying_key] == cfg[drying_key] + cfg[drying_key][2:4], \
         "блок из двух значений на слот не вырос целиком"
 
 

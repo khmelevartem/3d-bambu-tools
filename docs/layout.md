@@ -18,9 +18,10 @@ my-print-project/
 
 The install commands are in the [README](../README.md). Two notes on them:
 
-Both symlinks point into `tools/`, so a `git pull` there updates the rules and
-the skills in place. If the project already has its own `AGENTS.md` or
-`CLAUDE.md`, keep it and point at `tools/AGENTS.md` from there.
+The symlinks point into `tools/`, so a `git pull` there updates the rules and
+the skills in place. If the project already has its own `AGENTS.md`, keep it and point at
+`tools/AGENTS.md` from there. For Claude Code, import the project rules with
+`@AGENTS.md` in `CLAUDE.md` and link the same skills under `.claude/skills/`.
 
 `hardware.json` is the single source for nozzle diameter, layer height, line
 width and preset names — no script keeps those as constants. Change the nozzle
